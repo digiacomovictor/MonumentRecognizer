@@ -1,0 +1,142 @@
+{
+  "tower_of_pisa": {
+    "name": "Torre di Pisa",
+    "location": "Pisa, Italia",
+    "country": "Italia",
+    "city": "Pisa",
+    "coordinates": {
+      "latitude": 43.7230,
+      "longitude": 10.3966
+    },
+    "description": "La Torre di Pisa è il campanile della cattedrale di Santa Maria Assunta nella famosa Piazza dei Miracoli. Costruita tra il 1173 e il 1372, è famosa per la sua inclinazione dovuta a un cedimento del terreno. Alta 56 metri, è considerata una delle meraviglie del mondo medievale e simbolo dell'Italia.",
+    "year_built": "1173-1372",
+    "style": "Romanico pisano",
+    "google_names": ["Leaning Tower of Pisa", "Torre di Pisa", "Pisa Tower", "Leaning Tower"]
+  },
+  "eiffel_tower": {
+    "name": "Torre Eiffel",
+    "location": "Parigi, Francia",
+    "country": "Francia",
+    "city": "Parigi",
+    "coordinates": {
+      "latitude": 48.8584,
+      "longitude": 2.2945
+    },
+    "description": "La Torre Eiffel è una torre di ferro alta 330 metri situata nel Campo di Marte a Parigi. Costruita da Gustave Eiffel per l'Esposizione Universale del 1889, è diventata il simbolo di Parigi e della Francia. È uno dei monumenti più visitati al mondo con oltre 6 milioni di visitatori all'anno.",
+    "year_built": "1887-1889",
+    "style": "Architettura del ferro",
+    "google_names": ["Eiffel Tower", "Torre Eiffel", "Tour Eiffel", "Iron Tower"]
+  },
+  "colosseum": {
+    "name": "Colosseo",
+    "location": "Roma, Italia",
+    "country": "Italia",
+    "city": "Roma",
+    "coordinates": {
+      "latitude": 41.8902,
+      "longitude": 12.4922
+    },
+    "description": "Il Colosseo, originariamente noto come Anfiteatro Flavio, è il più grande anfiteatro mai costruito. Edificato nel I secolo d.C. sotto la dinastia flavia, poteva contenere fino a 87.000 spettatori. Era usato per combattimenti tra gladiatori e spettacoli pubblici. È patrimonio dell'umanità UNESCO dal 1980.",
+    "year_built": "72-82 d.C.",
+    "style": "Architettura romana",
+    "google_names": ["Colosseum", "Colosseo", "Roman Colosseum", "Flavian Amphitheatre", "Amphitheatre"]
+  },
+  "big_ben": {
+    "name": "Big Ben",
+    "location": "Londra, Inghilterra",
+    "country": "Regno Unito",
+    "city": "Londra",
+    "coordinates": {
+      "latitude": 51.5007,
+      "longitude": -0.1246
+    },
+    "description": "Big Ben è il soprannome della grande campana nell'orologio della Elizabeth Tower del Palazzo di Westminster a Londra. Completato nel 1859, l'orologio è famoso per la sua precisione e affidabilità. La torre alta 96 metri è diventata uno dei simboli più riconoscibili di Londra.",
+    "year_built": "1843-1859",
+    "style": "Neogotico",
+    "google_names": ["Big Ben", "Elizabeth Tower", "Westminster Clock Tower", "Palace of Westminster"]
+  },
+  "statue_of_liberty": {
+    "name": "Statua della Libertà",
+    "location": "New York, USA",
+    "country": "Stati Uniti",
+    "city": "New York",
+    "coordinates": {
+      "latitude": 40.6892,
+      "longitude": -74.0445
+    },
+    "description": "La Statua della Libertà è un dono della Francia agli Stati Uniti inaugurata nel 1886. Progettata da Frédéric Auguste Bartholdi, rappresenta Libertas, la dea romana della libertà. Alta 46 metri (93 metri incluso il piedistallo), è diventata un simbolo universale di libertà e democrazia.",
+    "year_built": "1875-1886",
+    "style": "Neoclassico",
+    "google_names": ["Statue of Liberty", "Statua della Libertà", "Liberty Statue", "Lady Liberty"]
+  },
+  "christ_redeemer": {
+    "name": "Cristo Redentore",
+    "location": "Rio de Janeiro, Brasile",
+    "country": "Brasile",
+    "city": "Rio de Janeiro",
+    "coordinates": {
+      "latitude": -22.9519,
+      "longitude": -43.2105
+    },
+    "description": "Il Cristo Redentore è una statua in stile art déco di Gesù Cristo a Rio de Janeiro. Alta 38 metri (incluso il piedistallo di 8 metri), fu costruita tra il 1922 e il 1931. Situata sulla cima del monte Corcovado a 700 metri di altitudine, è considerata una delle nuove sette meraviglie del mondo.",
+    "year_built": "1922-1931",
+    "style": "Art Déco",
+    "google_names": ["Christ the Redeemer", "Cristo Redentor", "Cristo Redentore", "Christ Statue"]
+  },
+  "taj_mahal": {
+    "name": "Taj Mahal",
+    "location": "Agra, India",
+    "country": "India",
+    "city": "Agra",
+    "coordinates": {
+      "latitude": 27.1751,
+      "longitude": 78.0421
+    },
+    "description": "Il Taj Mahal è un mausoleo situato ad Agra, in India. Fu costruito dall'imperatore moghul Shah Jahan in memoria della moglie Mumtaz Mahal, morta nel 1631. Considerato il gioiello dell'arte musulmana in India, è patrimonio dell'umanità UNESCO e una delle sette meraviglie del mondo moderno.",
+    "year_built": "1632-1653",
+    "style": "Architettura moghul",
+    "google_names": ["Taj Mahal", "Taj", "Mahal", "Mausoleum"]
+  },
+  "machu_picchu": {
+    "name": "Machu Picchu",
+    "location": "Cusco, Perù",
+    "country": "Perù",
+    "city": "Cusco",
+    "coordinates": {
+      "latitude": -13.1631,
+      "longitude": -72.5450
+    },
+    "description": "Machu Picchu è un sito archeologico inca situato nelle montagne del Perù orientale. Costruito intorno al 1450 e abbandonato un secolo dopo durante la conquista spagnola, fu riscoperto nel 1911. È considerato una delle sette meraviglie del mondo moderno e patrimonio UNESCO dal 1983.",
+    "year_built": "1450 circa",
+    "style": "Architettura inca",
+    "google_names": ["Machu Picchu", "Macchu Picchu", "Inca Ruins", "Ancient City"]
+  },
+  "notre_dame": {
+    "name": "Cattedrale di Notre-Dame",
+    "location": "Parigi, Francia",
+    "country": "Francia",
+    "city": "Parigi",
+    "coordinates": {
+      "latitude": 48.8530,
+      "longitude": 2.3499
+    },
+    "description": "Notre-Dame de Paris è una cattedrale gotica situata nell'Île de la Cité a Parigi. La sua costruzione iniziò nel 1163 e fu completata nel 1345. Capolavoro dell'arte gotica francese, è famosa per le sue vetrate, i rosoni, i portali scolpiti e i gargoyle. È uno dei monumenti più visitati di Francia.",
+    "year_built": "1163-1345",
+    "style": "Gotico francese",
+    "google_names": ["Notre-Dame de Paris", "Notre Dame Cathedral", "Cathedral of Notre Dame", "Notre-Dame"]
+  },
+  "sagrada_familia": {
+    "name": "Sagrada Família",
+    "location": "Barcellona, Spagna",
+    "country": "Spagna",
+    "city": "Barcellona",
+    "coordinates": {
+      "latitude": 41.4036,
+      "longitude": 2.1744
+    },
+    "description": "La Sagrada Família è una basilica cattolica di Barcellona, in Spagna, progettata dall'architetto Antoni Gaudí. La sua costruzione iniziò nel 1882 ed è ancora in corso. Capolavoro dell'architettura modernista catalana, è caratterizzata da un design unico che combina stili gotici e art nouveau. È patrimonio UNESCO dal 1984.",
+    "year_built": "1882-in costruzione",
+    "style": "Modernismo catalano",
+    "google_names": ["Sagrada Familia", "Sagrada Família", "Basilica of the Sagrada Familia", "Gaudí Cathedral"]
+  }
+}
