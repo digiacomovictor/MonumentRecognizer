@@ -63,29 +63,33 @@ jobs:
         echo "📦 Requirements.txt content:"
         cat requirements.txt
         
-    - name: 🧪 Test Python Imports
+    - name: 🧪 Test Python Imports (Detailed)
       run: |
-        echo "🐍 Testing critical imports..."
-        python -c "
-        import sys
-        print('Python path:', sys.path[:3])
+        echo "🐍 Testing critical imports step by step..."
         
-        try:
-            # Test basic imports
-            import json, os, io
-            from PIL import Image
-            print('✅ Basic imports: OK')
-        except Exception as e:
-            print('❌ Basic imports failed:', e)
-            sys.exit(1)
-            
-        try:
-            # Test Kivy (should work even without display)
-            import kivy
-            print('✅ Kivy import: OK')
-        except Exception as e:
-            print('⚠️ Kivy import failed:', e)
-        "
+        # Test 1: Basic Python imports
+        echo "1️⃣ Testing basic imports..."
+        python -c "import json, os, io, tempfile; print('✅ Basic Python imports: OK')"
+        
+        # Test 2: PIL/Pillow
+        echo "2️⃣ Testing PIL/Pillow..."
+        python -c "from PIL import Image; print('✅ PIL import: OK')"
+        
+        # Test 3: Requests
+        echo "3️⃣ Testing requests..."
+        python -c "import requests; print('✅ Requests import: OK')" || echo "⚠️ Requests not available"
+        
+        # Test 4: Kivy (might fail on headless)
+        echo "4️⃣ Testing Kivy (expected to fail on GitHub Actions)..."
+        python -c "import kivy; print('✅ Kivy import: OK')" || echo "⚠️ Kivy failed (normal on headless systems)"
+        
+        # Test 5: Our app modules
+        echo "5️⃣ Testing our app modules individually..."
+        python -c "import gps_manager; print('✅ gps_manager: OK')" || echo "❌ gps_manager failed"
+        python -c "import visit_tracker; print('✅ visit_tracker: OK')" || echo "❌ visit_tracker failed"
+        python -c "import user_system; print('✅ user_system: OK')" || echo "❌ user_system failed"
+        
+        echo "✅ Import tests completed"
         
     - name: 🚀 Buildozer Dry Run
       run: |
