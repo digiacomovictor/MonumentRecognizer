@@ -1,13 +1,12 @@
-# Byte-compiled / optimized / DLL files
+# Python
 __pycache__/
 *.py[cod]
 *$py.class
-
-# C extensions
 *.so
-
-# Distribution / packaging
 .Python
+env/
+venv/
+ENV/
 build/
 develop-eggs/
 dist/
@@ -20,90 +19,79 @@ parts/
 sdist/
 var/
 wheels/
-pip-wheel-metadata/
-share/python-wheels/
 *.egg-info/
 .installed.cfg
 *.egg
-MANIFEST
 
-# PyInstaller
-*.manifest
-*.spec
-
-# Installer logs
-pip-log.txt
-pip-delete-this-directory.txt
-
-# Unit test / coverage reports
-htmlcov/
-.tox/
-.nox/
-.coverage
-.coverage.*
-.cache
-nosetests.xml
-coverage.xml
-*.cover
-*.py,cover
-.hypothesis/
-.pytest_cache/
-
-# Virtual environments
-.env
-.venv
-env/
-venv/
-ENV/
-env.bak/
-venv.bak/
-buildozer_env/
-
-# Buildozer files
-.buildozer/
-bin/
-
-# Kivy
-*.pyc
-
-# IDE files
+# IDEs
 .vscode/
 .idea/
 *.swp
 *.swo
 *~
 
-# OS generated files
+# OS
 .DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
 Thumbs.db
 
-# App specific data files
-session.txt
-users_db.json
-monument_visits_*.json
-visit_photos_*/
-generated_maps/
-dashboard_charts/
+# Android/Buildozer
+.buildozer/
+bin/
+*.apk
+*.aab
+
+# Logs
 *.log
+logs/
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Cache
+.cache/
+*.cache
 
 # Temporary files
+tmp/
+temp/
 *.tmp
-*.temp
 
-# Google Vision API credentials (if used)
-service-account-key.json
-google-credentials.json
+# Test coverage
+.coverage
+htmlcov/
 
-# Local configuration files
-config.ini
+# Pytest
+.pytest_cache/
+
+# Keys and certificates (IMPORTANT!)
+*.key
+*.keystore
+*.p12
+*.pem
+*.crt
+service_account.json
+google_credentials.json
+
+# Environment variables
 .env
+.env.local
+.env.production
+.env.staging
 
-# Test files
-test_*.png
-test_*.jpg
-test_*.jpeg
+# Personal data
+my_data/
+personal/
+private/
+
+# Large files that shouldn't be in Git
+*.mp4
+*.mov
+*.avi
+large_datasets/
+models/*.h5
+models/*.pkl
+
+# Documentation build
+docs/_build/

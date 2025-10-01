@@ -1,0 +1,309 @@
+name: 🤖 Build Android APK - Monument Recognizer
+
+# Trigger: push su main branch o pull request
+on:
+  push:
+    branches: [ main, master ]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+  pull_request:
+    branches: [ main, master ]
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
+  
+  # Permette build manuali dalla UI GitHub
+  workflow_dispatch:
+    inputs:
+      build_type:
+        description: 'Build Type'
+        required: true
+        default: 'debug'
+        type: choice
+        options:
+        - debug
+        - release
+
+# Variabili globali
+env:
+  APP_NAME: MonumentRecognizer
+  PYTHON_VERSION: '3.9'
+
+jobs:
+  build-android:
+    name: 🏗️ Build Android APK
+    runs-on: ubuntu-latest
+    timeout-minutes: 90  # Timeout per evitare build infinite
+    
+    steps:
+    # 1. Checkout del codice
+    - name: 📥 Checkout Repository
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0  # Fetch completo per analisi
+
+    # 2. Setup Python
+    - name: 🐍 Setup Python ${{ env.PYTHON_VERSION }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ env.PYTHON_VERSION }}
+        cache: 'pip'
+
+    # 3. Setup Java per Android build
+    - name: ☕ Setup Java JDK 11
+      uses: actions/setup-java@v3
+      with:
+        java-version: '11'
+        distribution: 'adopt'
+
+    # 4. Cache per buildozer (velocizza build successive)
+    - name: 💾 Cache Buildozer Global Directory
+      uses: actions/cache@v3
+      with:
+        path: ~/.buildozer
+        key: buildozer-${{ runner.os }}-${{ hashFiles('buildozer.spec') }}
+        restore-keys: |
+          buildozer-${{ runner.os }}-
+
+    # 5. Cache per .buildozer project directory
+    - name: 💾 Cache Buildozer Project Directory
+      uses: actions/cache@v3
+      with:
+        path: .buildozer
+        key: buildozer-project-${{ runner.os }}-${{ hashFiles('buildozer.spec') }}-${{ hashFiles('**/*.py') }}
+        restore-keys: |
+          buildozer-project-${{ runner.os }}-${{ hashFiles('buildozer.spec') }}-
+          buildozer-project-${{ runner.os }}-
+
+    # 6. Installa dipendenze sistema per buildozer
+    - name: 📦 Install System Dependencies
+      run: |
+        sudo apt-get update -q
+        sudo apt-get install -y \
+          git zip unzip openjdk-11-jdk python3-pip autoconf libtool \
+          pkg-config zlib1g-dev libncurses5-dev libncursesw5-dev \
+          libtinfo5 cmake libffi-dev libssl-dev \
+          build-essential ccache m4 libc6-dev \
+          libgmp3-dev libmpc-dev libmpfr-dev libssl-dev make \
+          libsqlite3-dev tk-dev libzip-dev libbz2-dev \
+          libreadline-dev llvm libncurses5-dev xz-utils wget \
+          curl llvm libxml2-dev libxslt-dev libjpeg-dev zlib1g-dev
+        
+        echo "✅ Dipendenze sistema installate"
+
+    # 7. Installa buildozer e dipendenze Python
+    - name: 🔧 Install Buildozer and Dependencies
+      run: |
+        python -m pip install --upgrade pip wheel setuptools
+        python -m pip install buildozer cython==0.29.33
+        python -m pip install -r requirements.txt || echo "⚠️ Alcune dipendenze potrebbero non essere disponibili per Android"
+        
+        echo "✅ Buildozer installato"
+
+    # 8. Configura variabili ambiente Android
+    - name: ⚙️ Setup Android Environment
+      run: |
+        echo "ANDROID_HOME=$HOME/.buildozer/android/platform/android-sdk" >> $GITHUB_ENV
+        echo "ANDROID_SDK_ROOT=$HOME/.buildozer/android/platform/android-sdk" >> $GITHUB_ENV
+        echo "PATH=$PATH:$HOME/.buildozer/android/platform/android-sdk/platform-tools" >> $GITHUB_ENV
+
+    # 9. Verifica configurazione buildozer
+    - name: 🔍 Verify Buildozer Config
+      run: |
+        echo "📋 Verifica buildozer.spec..."
+        if [ ! -f "buildozer.spec" ]; then
+          echo "❌ File buildozer.spec non trovato!"
+          exit 1
+        fi
+        
+        echo "✅ Configurazione buildozer trovata:"
+        grep -E "(title|package\.name|version|requirements)" buildozer.spec | head -10
+
+    # 10. Debug: mostra info ambiente
+    - name: 🐛 Debug Environment Info
+      run: |
+        echo "🐍 Python version: $(python --version)"
+        echo "📦 Pip version: $(pip --version)"
+        echo "🔧 Buildozer version: $(buildozer --version)"
+        echo "☕ Java version: $(java -version 2>&1 | head -1)"
+        echo "💽 Disk space:"
+        df -h
+        echo "💾 Memory:"
+        free -h
+        echo "🔄 Environment variables:"
+        env | grep -E "(ANDROID|JAVA|PYTHON)" | sort
+
+    # 11. Inizializza buildozer (scarica SDK se necessario)
+    - name: 🚀 Initialize Buildozer
+      run: |
+        echo "🔄 Inizializzazione buildozer..."
+        buildozer android debug --verbose
+      continue-on-error: false  # Ferma se fallisce
+      timeout-minutes: 60      # Timeout per download SDK
+
+    # 12. Build APK
+    - name: 🏗️ Build Android APK
+      run: |
+        echo "🔨 Inizio build APK..."
+        
+        # Determina tipo build
+        BUILD_TYPE="${{ github.event.inputs.build_type || 'debug' }}"
+        echo "📱 Build type: $BUILD_TYPE"
+        
+        if [ "$BUILD_TYPE" = "release" ]; then
+          buildozer android release --verbose
+        else
+          buildozer android debug --verbose
+        fi
+        
+        echo "✅ Build completata!"
+      timeout-minutes: 45
+
+    # 13. Trova e rinomina APK
+    - name: 📱 Locate and Rename APK
+      run: |
+        echo "🔍 Ricerca APK generata..."
+        
+        APK_PATH=$(find . -name "*.apk" -type f | head -1)
+        if [ -z "$APK_PATH" ]; then
+          echo "❌ Nessun APK trovato!"
+          echo "📂 Contenuto directory bin/:"
+          ls -la bin/ || echo "Directory bin/ non esiste"
+          exit 1
+        fi
+        
+        echo "📱 APK trovata: $APK_PATH"
+        
+        # Rinomina APK con timestamp e commit
+        TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
+        COMMIT_SHORT=$(git rev-parse --short HEAD)
+        BUILD_TYPE="${{ github.event.inputs.build_type || 'debug' }}"
+        
+        NEW_NAME="MonumentRecognizer-v1.0-${BUILD_TYPE}-${TIMESTAMP}-${COMMIT_SHORT}.apk"
+        
+        mkdir -p release/
+        cp "$APK_PATH" "release/$NEW_NAME"
+        
+        echo "📱 APK rinominata: $NEW_NAME"
+        echo "APK_NAME=$NEW_NAME" >> $GITHUB_ENV
+        echo "APK_PATH=release/$NEW_NAME" >> $GITHUB_ENV
+        
+        # Info APK
+        ls -lh "release/$NEW_NAME"
+        echo "✅ APK pronta per download!"
+
+    # 14. Upload APK come artifact
+    - name: 📤 Upload APK Artifact
+      uses: actions/upload-artifact@v3
+      with:
+        name: ${{ env.APP_NAME }}-APK-${{ github.run_number }}
+        path: ${{ env.APK_PATH }}
+        retention-days: 30
+
+    # 15. Crea release GitHub (solo per push su main/master)
+    - name: 🏷️ Create GitHub Release
+      if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: v1.0.${{ github.run_number }}
+        name: 🏛️ Monument Recognizer v1.0.${{ github.run_number }}
+        body: |
+          ## 📱 Monument Recognizer Android APK
+          
+          🎉 **Build automatica GitHub Actions!**
+          
+          ### ✨ Caratteristiche di questa build:
+          - 🔔 **Sistema notifiche push completo**
+          - 🎮 **Gamification integrata** 
+          - 👥 **Social sharing avanzato**
+          - 🗺️ **Mappe interattive**
+          - 📊 **Analytics e statistiche**
+          - 🎨 **Modern Material UI**
+          
+          ### 📊 Dettagli Build:
+          - **Commit**: ${{ github.sha }}
+          - **Branch**: ${{ github.ref_name }}
+          - **Build Time**: ${{ github.event.head_commit.timestamp }}
+          - **Runner**: ubuntu-latest
+          - **Android Target**: API 31
+          - **Min API**: 21 (Android 5.0+)
+          
+          ### 📱 Installazione:
+          1. Scarica il file APK
+          2. Abilita "Sorgenti sconosciute" su Android
+          3. Installa l'APK
+          4. Inizia la tua avventura! 🏛️
+          
+          ### 🐛 Bug Report:
+          Apri una [issue](https://github.com/${{ github.repository }}/issues) se trovi problemi.
+          
+          ---
+          **Build automatica creata con ❤️ da GitHub Actions**
+        files: ${{ env.APK_PATH }}
+        draft: false
+        prerelease: true
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    # 16. Commento PR con link download (solo per PR)
+    - name: 💬 Comment PR with APK
+      if: github.event_name == 'pull_request'
+      uses: actions/github-script@v6
+      with:
+        script: |
+          const runId = context.runId;
+          const apkName = process.env.APK_NAME;
+          
+          const comment = `## 📱 APK Build Completata! 
+          
+          🎉 Il build Android è stato completato con successo!
+          
+          **📥 Download APK**: [${apkName}](https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${runId})
+          
+          ### 🧪 Come testare:
+          1. Vai alla sezione "Artifacts" nel link sopra
+          2. Scarica l'APK
+          3. Installa su dispositivo Android (abilita sorgenti sconosciute)
+          4. Testa le funzionalità!
+          
+          ### ✅ Sistemi Integrati:
+          - 🔔 Notifiche Push
+          - 🎮 Gamification  
+          - 👥 Social Sharing
+          - 🗺️ Mappe Interactive
+          - 📊 Analytics
+          
+          ---
+          *Build creata automaticamente da GitHub Actions* 🚀`;
+          
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: comment
+          });
+
+    # 17. Cleanup e summary
+    - name: 🧹 Build Summary
+      if: always()
+      run: |
+        echo "📊 === BUILD SUMMARY ==="
+        echo "🏗️ Build Status: ${{ job.status }}"
+        echo "📱 App: ${{ env.APP_NAME }}"
+        echo "🐍 Python: ${{ env.PYTHON_VERSION }}"
+        echo "☕ Java: 11"
+        echo "🤖 Android API: 31"
+        echo "⏱️ Build Time: $(date)"
+        
+        if [ "${{ job.status }}" = "success" ]; then
+          echo "✅ APK creata con successo!"
+          echo "📥 Download: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+        else
+          echo "❌ Build fallita - controlla i log sopra"
+        fi
+        
+        echo "💾 Spazio disco rimanente:"
+        df -h
+        
+        echo "🔚 Fine build GitHub Actions"

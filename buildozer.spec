@@ -22,7 +22,8 @@ version = 1.0.0
 
 # (list) Application requirements
 # comma separated e.g. requirements = sqlite3,kivy
-requirements = python3,kivy,pillow,requests,matplotlib,plotly,pandas,folium,kivymd,plyer
+# Ottimizzato per Android - rimosse librerie problematiche
+requirements = python3,kivy==2.1.0,kivymd,pillow,requests,plyer,sqlite3
 
 # (str) Custom source folders for requirements
 # Sets custom source for any requirements with recipes
@@ -37,17 +38,17 @@ requirements = python3,kivy,pillow,requests,matplotlib,plotly,pandas,folium,kivy
 # (str) Supported orientation (one of landscape, sensorLandscape, portrait or all)
 orientation = portrait
 
-# (list) Permissions
-android.permissions = INTERNET,WRITE_EXTERNAL_STORAGE,READ_EXTERNAL_STORAGE,CAMERA,ACCESS_FINE_LOCATION,ACCESS_COARSE_LOCATION,WAKE_LOCK
+# (list) Permissions - Ottimizzato per Android con notifiche push
+android.permissions = INTERNET,WRITE_EXTERNAL_STORAGE,READ_EXTERNAL_STORAGE,CAMERA,ACCESS_FINE_LOCATION,ACCESS_COARSE_LOCATION,WAKE_LOCK,VIBRATE,ACCESS_NOTIFICATION_POLICY,BIND_NOTIFICATION_LISTENER_SERVICE
 
 # (int) Target Android API, should be as high as possible.
-android.api = 30
+android.api = 31
 
 # (int) Minimum API your APK will support.
 android.minapi = 21
 
 # (int) Android SDK version to use
-android.sdk = 30
+android.sdk = 31
 
 # (str) Android NDK version to use
 android.ndk = 21.4.7075529
