@@ -76,21 +76,17 @@ jobs:
           buildozer-project-${{ runner.os }}-${{ hashFiles('buildozer.spec') }}-
           buildozer-project-${{ runner.os }}-
 
-    # 6. Installa dipendenze sistema per buildozer
+    # 6. Installa dipendenze sistema per buildozer (versione semplificata)
     - name: 📦 Install System Dependencies
       run: |
         sudo apt-get update -q
-        sudo apt-get install -y \
-          git zip unzip openjdk-11-jdk python3-pip autoconf libtool \
-          pkg-config zlib1g-dev libncurses5-dev libncursesw5-dev \
-          libtinfo5 cmake libffi-dev libssl-dev \
-          build-essential ccache m4 libc6-dev \
-          libgmp3-dev libmpc-dev libmpfr-dev libssl-dev make \
-          libsqlite3-dev tk-dev libzip-dev libbz2-dev \
-          libreadline-dev llvm libncurses5-dev xz-utils wget \
-          curl llvm libxml2-dev libxslt-dev libjpeg-dev zlib1g-dev
+        sudo apt-get install -y --no-install-recommends \
+          git zip unzip openjdk-11-jdk python3-pip \
+          build-essential autoconf libtool pkg-config \
+          zlib1g-dev libffi-dev libssl-dev \
+          libsqlite3-dev wget curl
         
-        echo "✅ Dipendenze sistema installate"
+        echo "✅ Dipendenze sistema essenziali installate"
 
     # 7. Installa buildozer e dipendenze Python
     - name: 🔧 Install Buildozer and Dependencies
