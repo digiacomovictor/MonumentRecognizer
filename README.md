@@ -1,8 +1,8 @@
-# 🏛️ Monument Recognizer v2.0
+# 🏛️ Monument Recognizer v2.1
 
-**Riconoscimento Monumenti Intelligente con GPS, Mappe e Sistema Utenti**
+**Riconoscimento Monumenti Intelligente con GPS, Mappe, Sistema Utenti e Condivisione Social**
 
-Un'applicazione Python avanzata per riconoscere monumenti del mondo con GPS tracking, mappe interattive, sistema utenti completo e AI-powered recognition.
+Un'applicazione Python avanzata per riconoscere monumenti del mondo con GPS tracking, mappe interattive, sistema utenti completo, AI-powered recognition e funzionalità social per condividere le tue scoperte.
 
 ![Status](https://img.shields.io/badge/Status-Active-success)
 ![Python](https://img.shields.io/badge/Python-3.11+-blue)
@@ -33,6 +33,13 @@ Un'applicazione Python avanzata per riconoscere monumenti del mondo con GPS trac
 - 🎫 **Sessioni persistenti** - Login automatico tra sessioni
 - 📊 **Tracking personalizzato** - Visite e statistiche per utente
 - 💻 **Interfacce moderne** - UI Kivy responsive e intuitive
+
+### 🌐 Condivisione Social
+- 📤 **Multi-platform sharing** - Twitter, Facebook, Instagram, WhatsApp, Telegram, LinkedIn
+- 📱 **Feed interno** - Community delle scoperte nell'app
+- 👍 **Interazioni social** - Like, commenti e statistiche
+- 📊 **Analytics social** - Tracking condivisioni e engagement
+- 🎨 **Template automatici** - Post ottimizzati per ogni piattaforma
 
 ### 🛠️ Configurazione Avanzata
 - ⚡ **Setup automatico** - Installazione dipendenze one-click
@@ -76,7 +83,9 @@ python configure_google_vision.py
 3. 📷 **Scatta/Carica**: Ottieni immagine del monumento
 4. 🔍 **Riconosci**: Analizza con AI
 5. 📍 **Posizione**: GPS automatico per tracking
-6. 🗺️ **Mappa**: Visualizza visite e percorsi
+6. 📤 **Condividi**: Pubblica sui social o nel feed interno
+7. 🗺️ **Mappa**: Visualizza visite e percorsi
+8. 👥 **Social**: Esplora il feed della community
 
 ### Demo Autenticazione
 1. 🚀 **Avvio**: `avvia_demo_auth.bat`
@@ -94,6 +103,9 @@ python test_gps_mapping.py
 
 # Test sistema autenticazione
 python test_user_system.py
+
+# Test funzionalità social
+python test_social.py
 
 # Test configurazione Google Vision
 python test_google_vision.py
@@ -125,6 +137,11 @@ MonumentRecognizer/
 │   ├── visit_tracker.py          # Tracking visite
 │   └── map_generator.py          # Generazione mappe Folium
 │
+├── 🌐 Condivisione Social
+│   ├── social_sharing.py         # Engine condivisione social
+│   ├── social_ui.py              # UI feed e condivisione
+│   └── test_social.py            # Test funzionalità social
+│
 ├── 🧪 Test e Configurazione
 │   ├── test_user_system.py       # Test autenticazione
 │   ├── test_gps_mapping.py       # Test GPS/mappe
@@ -138,6 +155,7 @@ MonumentRecognizer/
 │
 └── 📚 Documentazione
     ├── README.md                  # Questo file
+    ├── SOCIAL_FEATURES.md         # Guida funzionalità social
     └── setup_camera_permissions.md # Guida fotocamera
 ```
 
