@@ -195,7 +195,7 @@ jobs:
 
     # 14. Upload APK come artifact
     - name: 📤 Upload APK Artifact
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: ${{ env.APP_NAME }}-APK-${{ github.run_number }}
         path: ${{ env.APK_PATH }}
