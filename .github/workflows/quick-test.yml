@@ -35,11 +35,19 @@ jobs:
         echo "Free space: $(df -h . | tail -1)"
         echo ""
         
-    - name: 📦 Install Buildozer
+    - name: 📦 Install Dependencies
       run: |
         python -m pip install --upgrade pip
+        
+        # Install buildozer first
         pip install buildozer cython==0.29.33
         echo "Buildozer version: $(buildozer --version)"
+        
+        # Install app dependencies from requirements.txt
+        echo "📦 Installing app dependencies..."
+        pip install -r requirements.txt || echo "⚠️ Some dependencies might not be available"
+        
+        echo "✅ Dependencies installed"
         
     - name: 📋 Check Project Files
       run: |
