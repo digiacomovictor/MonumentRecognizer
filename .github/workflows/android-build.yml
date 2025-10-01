@@ -130,31 +130,72 @@ jobs:
         echo "🔄 Environment variables:"
         env | grep -E "(ANDROID|JAVA|PYTHON)" | sort
 
-    # 11. Inizializza buildozer (scarica SDK se necessario)
-    - name: 🚀 Initialize Buildozer
+    # 11. Pre-scarica Android SDK/NDK (più affidabile)
+    - name: 📱 Setup Android SDK
+      run: |
+        echo "📱 Setup Android SDK..."
+        export ANDROID_HOME=$HOME/.buildozer/android/platform/android-sdk
+        export ANDROID_SDK_ROOT=$ANDROID_HOME
+        mkdir -p $ANDROID_HOME
+        
+        echo "📋 Configurazione Android:"
+        echo "ANDROID_HOME: $ANDROID_HOME"
+        echo "JAVA_HOME: $JAVA_HOME"
+      timeout-minutes: 10
+    
+    # 12. Inizializza buildozer con retry
+    - name: 🚀 Initialize Buildozer (with retry)
       run: |
         echo "🔄 Inizializzazione buildozer..."
-        buildozer android debug --verbose
-      continue-on-error: false  # Ferma se fallisce
-      timeout-minutes: 60      # Timeout per download SDK
+        
+        # Retry logic per buildozer init
+        MAX_ATTEMPTS=3
+        ATTEMPT=1
+        
+        while [ $ATTEMPT -le $MAX_ATTEMPTS ]; do
+          echo "📋 Tentativo $ATTEMPT di $MAX_ATTEMPTS"
+          
+          if timeout 45m buildozer android debug --verbose; then
+            echo "✅ Buildozer inizializzato con successo!"
+            break
+          else
+            echo "⚠️ Tentativo $ATTEMPT fallito"
+            if [ $ATTEMPT -eq $MAX_ATTEMPTS ]; then
+              echo "❌ Tutti i tentativi falliti"
+              exit 1
+            fi
+            
+            echo "🔄 Pulizia cache e retry..."
+            rm -rf .buildozer/android/platform/android-sdk-* || true
+            rm -rf .buildozer/android/platform/android-ndk-* || true
+            ATTEMPT=$((ATTEMPT + 1))
+            sleep 30
+          fi
+        done
+      timeout-minutes: 150  # 2.5 ore totali (3 tentativi x 45min)
 
-    # 12. Build APK
-    - name: 🏗️ Build Android APK
+    # 13. Verifica APK creata
+    - name: 📱 Verify APK Creation
       run: |
-        echo "🔨 Inizio build APK..."
+        echo "🔍 Verifica APK creata..."
         
-        # Determina tipo build
-        BUILD_TYPE="${{ github.event.inputs.build_type || 'debug' }}"
-        echo "📱 Build type: $BUILD_TYPE"
-        
-        if [ "$BUILD_TYPE" = "release" ]; then
-          buildozer android release --verbose
+        if [ -d "bin" ]; then
+          echo "📋 Contenuto directory bin/:"
+          ls -la bin/
+          
+          APK_COUNT=$(find bin/ -name "*.apk" | wc -l)
+          echo "📱 APK trovate: $APK_COUNT"
+          
+          if [ $APK_COUNT -gt 0 ]; then
+            echo "✅ APK creata con successo!"
+          else
+            echo "❌ Nessuna APK trovata"
+            exit 1
+          fi
         else
-          buildozer android debug --verbose
+          echo "❌ Directory bin/ non esiste"
+          exit 1
         fi
-        
-        echo "✅ Build completata!"
-      timeout-minutes: 45
 
     # 13. Trova e rinomina APK
     - name: 📱 Locate and Rename APK

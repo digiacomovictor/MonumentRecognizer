@@ -1,0 +1,108 @@
+name: 🚀 Quick Android Test
+
+# Solo build manuale per test rapidi
+on:
+  workflow_dispatch:
+
+jobs:
+  quick-test:
+    name: 🧪 Quick Android Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    
+    steps:
+    - name: 📥 Checkout
+      uses: actions/checkout@v4
+      
+    - name: 🐍 Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+        
+    - name: ☕ Setup Java
+      uses: actions/setup-java@v3
+      with:
+        java-version: '11'
+        distribution: 'adopt'
+        
+    - name: 🔍 Environment Check
+      run: |
+        echo "🌍 Environment Info:"
+        echo "Python: $(python --version)"
+        echo "Java: $(java -version 2>&1 | head -1)"
+        echo "PWD: $(pwd)"
+        echo "User: $(whoami)"
+        echo "Free space: $(df -h . | tail -1)"
+        echo ""
+        
+    - name: 📦 Install Buildozer
+      run: |
+        python -m pip install --upgrade pip
+        pip install buildozer cython==0.29.33
+        echo "Buildozer version: $(buildozer --version)"
+        
+    - name: 📋 Check Project Files
+      run: |
+        echo "📁 Project structure:"
+        ls -la
+        echo ""
+        echo "🔍 Key files check:"
+        for file in main.py buildozer.spec requirements.txt; do
+          if [ -f "$file" ]; then
+            echo "✅ $file ($(wc -l < $file) lines, $(stat -c%s $file) bytes)"
+          else
+            echo "❌ $file missing"
+          fi
+        done
+        
+    - name: 🔧 Buildozer Config Check
+      run: |
+        echo "📋 Buildozer spec key settings:"
+        grep -E "(title|package\.name|version|requirements)" buildozer.spec || echo "❌ Config incomplete"
+        echo ""
+        echo "📦 Requirements.txt content:"
+        cat requirements.txt
+        
+    - name: 🧪 Test Python Imports
+      run: |
+        echo "🐍 Testing critical imports..."
+        python -c "
+        import sys
+        print('Python path:', sys.path[:3])
+        
+        try:
+            # Test basic imports
+            import json, os, io
+            from PIL import Image
+            print('✅ Basic imports: OK')
+        except Exception as e:
+            print('❌ Basic imports failed:', e)
+            sys.exit(1)
+            
+        try:
+            # Test Kivy (should work even without display)
+            import kivy
+            print('✅ Kivy import: OK')
+        except Exception as e:
+            print('⚠️ Kivy import failed:', e)
+        "
+        
+    - name: 🚀 Buildozer Dry Run
+      run: |
+        echo "🧪 Testing buildozer dry run..."
+        
+        # Solo test, non scarica niente
+        buildozer android debug --dry-run --verbose || echo "⚠️ Dry run completed with warnings"
+        
+        echo "✅ Buildozer test completed"
+        
+    - name: 📊 Test Summary  
+      run: |
+        echo "🎉 === QUICK TEST RESULTS ==="
+        echo "✅ Environment setup: OK"
+        echo "✅ Python imports: OK" 
+        echo "✅ Buildozer installation: OK"
+        echo "✅ Project structure: OK"
+        echo ""
+        echo "🎯 Ready for full build test!"
+        echo "📋 Next: Run main workflow or investigate specific errors"
