@@ -1,0 +1,291 @@
+name: 🚀 Android Build v4 - Force NDK
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/android-build-v4-force-ndk.yml'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    
+    steps:
+    - name: 📥 Checkout Repository
+      uses: actions/checkout@v4
+
+    - name: 🐍 Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+
+    - name: ☕ Setup Java
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'temurin'
+        java-version: '17'
+
+    - name: 🔧 Setup Android SDK & NDK  
+      uses: android-actions/setup-android@v3
+      with:
+        api-level: 31
+        build-tools-version: 31.0.0
+        ndk-version: 21.4.7075529
+
+    - name: 🧹 FORCE Clean Buildozer Cache
+      run: |
+        echo "🧹 FORCE REMOVING ALL BUILDOZER CACHES"
+        echo "======================================"
+        
+        # Rimuovi completamente le cache di Buildozer
+        rm -rf ~/.buildozer
+        rm -rf .buildozer
+        
+        # Crea le directory con i link simbolici all'NDK/SDK preinstallato
+        mkdir -p ~/.buildozer/android/platform
+        mkdir -p .buildozer/android/platform
+        
+        echo "✅ Cache pulite completamente"
+
+    - name: 🔗 Force Link to Pre-installed NDK/SDK
+      run: |
+        echo "🔗 FORCING BUILDOZER TO USE PRE-INSTALLED NDK/SDK"
+        echo "================================================"
+        
+        # Mostra dove sono SDK e NDK preinstallati
+        echo "🔍 Pre-installed NDK: $ANDROID_NDK_ROOT"
+        echo "🔍 Pre-installed SDK: $ANDROID_SDK_ROOT"
+        
+        ls -la "$ANDROID_NDK_ROOT" || echo "❌ NDK not found"
+        ls -la "$ANDROID_SDK_ROOT" || echo "❌ SDK not found"
+        
+        # Crea link simbolici per forzare Buildozer
+        if [ -d "$ANDROID_NDK_ROOT" ]; then
+          ln -sf "$ANDROID_NDK_ROOT" ~/.buildozer/android/platform/android-ndk-r21.4.7075529
+          ln -sf "$ANDROID_NDK_ROOT" .buildozer/android/platform/android-ndk-r21.4.7075529
+          echo "✅ NDK symbolic links created"
+        fi
+        
+        if [ -d "$ANDROID_SDK_ROOT" ]; then
+          ln -sf "$ANDROID_SDK_ROOT" ~/.buildozer/android/platform/android-sdk
+          ln -sf "$ANDROID_SDK_ROOT" .buildozer/android/platform/android-sdk
+          echo "✅ SDK symbolic links created"
+        fi
+
+    - name: 🛠️ Install Build Tools
+      timeout-minutes: 10
+      run: |
+        echo "🔄 Installing build tools..."
+        sudo apt-get update -qq
+        sudo apt-get install -y --no-install-recommends \
+          build-essential git unzip python3-dev \
+          zlib1g-dev libncurses5-dev libncursesw5-dev \
+          libtinfo5 cmake libffi-dev libssl-dev \
+          automake autoconf libtool pkg-config
+        
+        python -m pip install --upgrade pip setuptools wheel
+        pip install buildozer cython==0.29.33
+        
+        if [ -f requirements.txt ]; then
+          pip install -r requirements.txt
+        fi
+
+    - name: ⚙️ Configure Buildozer Spec (EXTREME)
+      run: |
+        echo "⚙️ EXTREME BUILDOZER CONFIGURATION"
+        echo "================================="
+        
+        # Backup
+        cp buildozer.spec buildozer.spec.backup
+        
+        # Script Python per configurazione estrema
+        python3 << 'EOF'
+import re
+import os
+
+# Ottieni percorsi reali
+ndk_path = os.environ.get('ANDROID_NDK_ROOT', '')
+sdk_path = os.environ.get('ANDROID_SDK_ROOT', '')
+
+print(f"🔍 Real NDK Path: {ndk_path}")  
+print(f"🔍 Real SDK Path: {sdk_path}")
+
+# Leggi spec
+with open('buildozer.spec', 'r') as f:
+    content = f.read()
+
+# Configurazioni ESTREME per forzare l'uso dell'NDK preinstallato
+extreme_configs = {
+    'android.ndk_path': ndk_path,
+    'android.sdk_path': sdk_path,
+    'android.ndk': '21.4.7075529',
+    'android.sdk': '31',
+    'android.enable_androidx': 'True',
+    # FORZA Buildozer a non scaricare NDK
+    'android.skip_update': 'True',
+    # Aggiungiamo parametri per forzare i percorsi
+    'p4a.local_recipes': '',
+}
+
+# Applica con forza ogni configurazione
+for key, value in extreme_configs.items():
+    pattern = rf'^#?\s*{re.escape(key)}\s*=.*$'
+    replacement = f'{key} = {value}'
+    
+    if re.search(pattern, content, re.MULTILINE):
+        content = re.sub(pattern, replacement, content, flags=re.MULTILINE)
+    else:
+        # Aggiungi nella sezione [app]
+        if '[app]' in content:
+            content = content.replace('[app]', f'[app]\n{replacement}')
+
+# Scrivi configurazione modificata
+with open('buildozer.spec', 'w') as f:
+    f.write(content)
+
+print("✅ EXTREME Buildozer.spec configured")
+EOF
+
+        echo "📋 Configuration diff:"
+        diff buildozer.spec.backup buildozer.spec || echo "✅ Changes applied"
+
+    - name: 🔍 Pre-Build Verification
+      run: |
+        echo "🔍 PRE-BUILD VERIFICATION"
+        echo "========================"
+        
+        echo "📋 Environment:"
+        echo "  Python: $(python --version)"
+        echo "  Java: $(java -version 2>&1 | head -1)"  
+        echo "  Buildozer: $(buildozer --version)"
+        
+        echo "📋 Android Paths:"
+        echo "  NDK_ROOT: $ANDROID_NDK_ROOT"
+        echo "  SDK_ROOT: $ANDROID_SDK_ROOT"
+        
+        echo "📋 Buildozer Paths:"
+        ls -la ~/.buildozer/android/platform/ || echo "No buildozer platform dir"
+        ls -la .buildozer/android/platform/ || echo "No local buildozer platform dir"
+        
+        echo "📋 NDK/SDK Links:"
+        if [ -L ~/.buildozer/android/platform/android-ndk-r21.4.7075529 ]; then
+          echo "✅ NDK symlink exists: $(readlink ~/.buildozer/android/platform/android-ndk-r21.4.7075529)"
+        else
+          echo "❌ NDK symlink missing"
+        fi
+        
+        if [ -L ~/.buildozer/android/platform/android-sdk ]; then
+          echo "✅ SDK symlink exists: $(readlink ~/.buildozer/android/platform/android-sdk)"
+        else
+          echo "❌ SDK symlink missing"
+        fi
+
+    - name: 🚀 Buildozer Android Debug (FORCED)
+      timeout-minutes: 60
+      run: |
+        echo "🚀 STARTING FORCED BUILDOZER BUILD"
+        echo "================================="
+        
+        # Variabili di ambiente aggiuntive per forzare l'uso dell'NDK preinstallato
+        export ANDROIDSDK="$ANDROID_SDK_ROOT"
+        export ANDROIDNDK="$ANDROID_NDK_ROOT"
+        export ANDROIDAPI="31"
+        export NDKAPI="21"
+        
+        echo "📋 Force environment variables:"
+        echo "  ANDROIDSDK: $ANDROIDSDK"
+        echo "  ANDROIDNDK: $ANDROIDNDK"
+        echo "  ANDROIDAPI: $ANDROIDAPI"
+        echo "  NDKAPI: $NDKAPI"
+        
+        # Buildozer con output verboso per debug
+        echo "🔄 Running buildozer with verbose output..."
+        if buildozer -v android debug 2>&1 | tee build_log_v4_forced.txt; then
+          echo "🎉 BUILD SUCCESS!"
+        else
+          echo "❌ Build failed, checking logs..."
+          echo "📋 Last 30 lines:"
+          tail -n 30 build_log_v4_forced.txt
+          
+          # Verifica se è ancora il problema NDK download
+          if grep -q "Android NDK is missing, downloading" build_log_v4_forced.txt; then
+            echo "🚨 SAME NDK DOWNLOAD ISSUE - Need more extreme measures"
+            exit 1
+          fi
+          
+          exit 1
+        fi
+
+    - name: 📦 Verify APK Generation
+      run: |
+        echo "📦 CHECKING APK GENERATION"
+        echo "========================="
+        
+        if ls bin/*.apk 1> /dev/null 2>&1; then
+          echo "🎉 APK GENERATED SUCCESSFULLY!"
+          echo "📱 APK files:"
+          ls -la bin/*.apk
+          
+          # Info su APK
+          for apk in bin/*.apk; do
+            echo "📊 APK: $apk"
+            echo "   Size: $(du -h "$apk" | cut -f1)"
+          done
+        else
+          echo "❌ NO APK FOUND"
+          echo "📁 Contents of bin/:"
+          ls -la bin/ || echo "bin/ directory not found"
+        fi
+
+    - name: 📤 Upload APK (if exists)
+      if: success()
+      uses: actions/upload-artifact@v4
+      with:
+        name: MonumentRecognizer-APK-v4-FORCED
+        path: bin/*.apk
+        retention-days: 30
+
+    - name: 📤 Upload Build Logs  
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: build-logs-v4-forced
+        path: build_log_*.txt
+        retention-days: 7
+
+    - name: 📊 Final Summary
+      if: always()
+      run: |
+        echo "## 📊 Android Build Summary v4 - FORCED NDK" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        
+        if ls bin/*.apk 1> /dev/null 2>&1; then
+          echo "### 🎉 SUCCESS!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "✅ **APK Generated Successfully!**" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**APK Files:**" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          ls -la bin/*.apk >> $GITHUB_STEP_SUMMARY  
+          echo '```' >> $GITHUB_STEP_SUMMARY
+        else
+          echo "### ❌ FAILED" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Build failed. Check logs for details." >> $GITHUB_STEP_SUMMARY
+          
+          if [ -f build_log_v4_forced.txt ]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**Last Build Errors:**" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            tail -n 15 build_log_v4_forced.txt >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+          fi
+        fi
+        
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### 🔧 Strategy Used" >> $GITHUB_STEP_SUMMARY
+        echo "- **Force clean** all Buildozer caches" >> $GITHUB_STEP_SUMMARY
+        echo "- **Symbolic links** to pre-installed NDK/SDK" >> $GITHUB_STEP_SUMMARY
+        echo "- **Environment variables** override" >> $GITHUB_STEP_SUMMARY
+        echo "- **Extreme buildozer.spec** configuration" >> $GITHUB_STEP_SUMMARY
