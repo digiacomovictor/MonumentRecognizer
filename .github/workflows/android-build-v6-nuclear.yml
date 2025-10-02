@@ -9,21 +9,21 @@ jobs:
     timeout-minutes: 120
     
     steps:
-    - name: 📥 Checkout Repository
+    - name:  Checkout Repository
       uses: actions/checkout@v4
 
-    - name: 🐍 Setup Python
+    - name:  Setup Python
       uses: actions/setup-python@v4
       with:
         python-version: '3.9'
 
-    - name: ☕ Setup Java
+    - name:  Setup Java
       uses: actions/setup-java@v4
       with:
         distribution: 'temurin'
         java-version: '17'
 
-    - name: 🔧 Setup Android SDK & NDK
+    - name:  Setup Android SDK & NDK
       uses: android-actions/setup-android@v3
       with:
         cmdline-tools-version: '9.0'
@@ -35,10 +35,10 @@ jobs:
           ndk;21.4.7075529
         cache-disabled: true
 
-    - name: 🔍 Find Android Installation
+    - name:  Find Android Installation
       id: android_paths
       run: |
-        echo "🔍 FINDING ANDROID INSTALLATION"
+        echo " FINDING ANDROID INSTALLATION"
         echo "==============================="
         
         # Search for Android SDK in common locations
@@ -61,7 +61,7 @@ jobs:
           ANDROID_HOME=$(find $HOME -name "*android*" -type d 2>/dev/null | head -1)
         fi
         
-        echo "🔍 Android SDK found at: $ANDROID_HOME"
+        echo " Android SDK found at: $ANDROID_HOME"
         
         # Find NDK - FORCE correct version or download
         ANDROID_NDK=""
@@ -77,7 +77,7 @@ jobs:
         
         # If NDK 21.4.7075529 not found, download it manually
         if [ -z "$ANDROID_NDK" ] || [ ! -d "$ANDROID_NDK" ]; then
-          echo "⚠️  NDK 21.4.7075529 not found, downloading manually..."
+          echo "  NDK 21.4.7075529 not found, downloading manually..."
           mkdir -p "$ANDROID_HOME/ndk"
           
           # Download NDK 21.4.7075529 directly
@@ -87,27 +87,27 @@ jobs:
           rm ndk21.zip
           
           ANDROID_NDK="$ANDROID_HOME/ndk/21.4.7075529"
-          echo "✅ NDK 21.4.7075529 downloaded and installed"
+          echo " NDK 21.4.7075529 downloaded and installed"
         fi
         
-        echo "🔍 Android NDK found at: $ANDROID_NDK"
+        echo " Android NDK found at: $ANDROID_NDK"
         
         # Verify paths exist
         if [ -d "$ANDROID_HOME" ]; then
-          echo "✅ Android SDK verified: $ANDROID_HOME"
+          echo " Android SDK verified: $ANDROID_HOME"
           ls -la "$ANDROID_HOME" | head -5
         else
-          echo "❌ Android SDK not found!"
-          echo "🔍 Available directories:"
+          echo " Android SDK not found!"
+          echo " Available directories:"
           find /usr/local /opt $HOME -name "*android*" -type d 2>/dev/null | head -10
         fi
         
         if [ -d "$ANDROID_NDK" ]; then
-          echo "✅ Android NDK verified: $ANDROID_NDK"
+          echo " Android NDK verified: $ANDROID_NDK"
           ls -la "$ANDROID_NDK" | head -5
         else
-          echo "❌ Android NDK not found!"
-          echo "🔍 Available NDK directories:"
+          echo " Android NDK not found!"
+          echo " Available NDK directories:"
           find /usr/local /opt $HOME -name "*ndk*" -type d 2>/dev/null | head -10
         fi
         
@@ -128,7 +128,7 @@ jobs:
         mkdir -p .buildozer/android/app
         mkdir -p .buildozer/applibs
         
-        echo "📋 Android paths:"
+        echo " Android paths:"
         echo "  SDK: $ANDROID_HOME"
         echo "  NDK: $ANDROID_NDK_ROOT"
         
@@ -137,14 +137,14 @@ jobs:
           echo "NUCLEAR: COPYING Android SDK to Buildozer cache..."
           cp -r "$ANDROID_HOME" ~/.buildozer/android/platform/android-sdk
           cp -r "$ANDROID_HOME" .buildozer/android/platform/android-sdk
-          echo "✅ Android SDK copied to buildozer cache"
+          echo " Android SDK copied to buildozer cache"
         fi
         
         if [ -d "$ANDROID_NDK_ROOT" ]; then
           echo "NUCLEAR: COPYING Android NDK to Buildozer cache..."
           cp -r "$ANDROID_NDK_ROOT" ~/.buildozer/android/platform/android-ndk-r21.4.7075529
           cp -r "$ANDROID_NDK_ROOT" .buildozer/android/platform/android-ndk-r21.4.7075529
-          echo "✅ Android NDK copied to buildozer cache"
+          echo " Android NDK copied to buildozer cache"
         fi
         
         # Pre-download Apache ANT to avoid download issues
@@ -153,14 +153,14 @@ jobs:
         wget -q https://archive.apache.org/dist/ant/binaries/apache-ant-1.9.4-bin.tar.gz -O ant.tar.gz
         tar -xzf ant.tar.gz -C ~/.buildozer/android/platform/
         rm ant.tar.gz
-        echo "✅ Apache ANT pre-installed"
+        echo " Apache ANT pre-installed"
         
         # Verify cache population
-        echo "📋 Buildozer cache contents:"
+        echo " Buildozer cache contents:"
         ls -la ~/.buildozer/android/platform/
         ls -la .buildozer/android/platform/
 
-    - name: 🛠️ Install Dependencies
+    - name:  Install Dependencies
       run: |
         sudo apt-get update -qq
         sudo apt-get install -y --no-install-recommends \
@@ -175,9 +175,9 @@ jobs:
           pip install -r requirements.txt
         fi
 
-    - name: ⚙️ Configure Buildozer (NUCLEAR)
+    - name:  Configure Buildozer (NUCLEAR)
       run: |
-        echo "⚙️ NUCLEAR BUILDOZER CONFIGURATION"
+        echo " NUCLEAR BUILDOZER CONFIGURATION"
         echo "=================================="
         
         cp buildozer.spec buildozer.spec.backup
@@ -205,7 +205,7 @@ nuclear_configs = {
     'source.dir': '.',
 }
 
-print("☢️ NUCLEAR configurations:")
+print(" NUCLEAR configurations:")
 for key, value in nuclear_configs.items():
     print(f"  {key} = {value}")
 
@@ -222,45 +222,45 @@ for key, value in nuclear_configs.items():
 with open('buildozer.spec', 'w') as f:
     f.write(content)
 
-print("☢️ NUCLEAR buildozer.spec configured")
+print(" NUCLEAR buildozer.spec configured")
 EOF
 
-        echo "📋 Configuration diff:"
-        diff buildozer.spec.backup buildozer.spec || echo "✅ Nuclear changes applied"
+        echo " Configuration diff:"
+        diff buildozer.spec.backup buildozer.spec || echo " Nuclear changes applied"
 
-    - name: 🔍 Nuclear Verification
+    - name:  Nuclear Verification
       run: |
-        echo "🔍 NUCLEAR VERIFICATION"
+        echo " NUCLEAR VERIFICATION"
         echo "======================="
         
-        echo "📋 Environment:"
+        echo " Environment:"
         echo "  Python: $(python --version)"
         echo "  Java: $(java -version 2>&1 | head -1)"
         echo "  Buildozer: $(buildozer --version)"
         
-        echo "📋 Pre-populated cache verification:"
+        echo " Pre-populated cache verification:"
         if [ -d ~/.buildozer/android/platform/android-sdk ]; then
-          echo "✅ Android SDK in cache: $(du -sh ~/.buildozer/android/platform/android-sdk)"
+          echo " Android SDK in cache: $(du -sh ~/.buildozer/android/platform/android-sdk)"
         else
-          echo "❌ Android SDK missing from cache"
+          echo " Android SDK missing from cache"
         fi
         
         if [ -d ~/.buildozer/android/platform/android-ndk-r21.4.7075529 ]; then
-          echo "✅ Android NDK in cache: $(du -sh ~/.buildozer/android/platform/android-ndk-r21.4.7075529)"
+          echo " Android NDK in cache: $(du -sh ~/.buildozer/android/platform/android-ndk-r21.4.7075529)"
         else
-          echo "❌ Android NDK missing from cache"
+          echo " Android NDK missing from cache"
         fi
         
         if [ -d ~/.buildozer/android/platform/apache-ant-1.9.4 ]; then
-          echo "✅ Apache ANT in cache: $(du -sh ~/.buildozer/android/platform/apache-ant-1.9.4)"
+          echo " Apache ANT in cache: $(du -sh ~/.buildozer/android/platform/apache-ant-1.9.4)"
         else
-          echo "❌ Apache ANT missing from cache"
+          echo " Apache ANT missing from cache"
         fi
 
-    - name: ☢️ NUCLEAR BUILD
+    - name:  NUCLEAR BUILD
       timeout-minutes: 90
       run: |
-        echo "☢️ STARTING NUCLEAR BUILDOZER BUILD"
+        echo " STARTING NUCLEAR BUILDOZER BUILD"
         echo "==================================="
         
         # Set nuclear environment variables
@@ -270,57 +270,57 @@ EOF
         export NDKAPI="21"
         export ANT_HOME=~/.buildozer/android/platform/apache-ant-1.9.4
         
-        echo "☢️ Nuclear environment:"
+        echo " Nuclear environment:"
         echo "  ANDROIDSDK: $ANDROIDSDK"
         echo "  ANDROIDNDK: $ANDROIDNDK"
         echo "  ANT_HOME: $ANT_HOME"
         
         # Nuclear build with all dependencies pre-populated
-        echo "🚀 Nuclear buildozer build..."
+        echo " Nuclear buildozer build..."
         if buildozer -v android debug 2>&1 | tee build_log_nuclear.txt; then
-          echo "☢️ NUCLEAR BUILD SUCCESS!"
+          echo " NUCLEAR BUILD SUCCESS!"
         else
-          echo "☢️ Nuclear build failed"
-          echo "📋 Last 50 lines:"
+          echo " Nuclear build failed"
+          echo " Last 50 lines:"
           tail -n 50 build_log_nuclear.txt
           
           # Check if STILL trying to download NDK
           if grep -q "Android NDK is missing, downloading" build_log_nuclear.txt; then
-            echo "🚨 BUILDOZER IS IGNORING OUR CACHE!"
-            echo "🔍 Cache contents at failure:"
+            echo " BUILDOZER IS IGNORING OUR CACHE!"
+            echo " Cache contents at failure:"
             ls -la ~/.buildozer/android/platform/
-            echo "🔍 Buildozer is looking in:"
+            echo " Buildozer is looking in:"
             grep -B5 -A5 "Android NDK is missing" build_log_nuclear.txt
           fi
           
           exit 1
         fi
 
-    - name: 📦 Verify Nuclear APK
+    - name:  Verify Nuclear APK
       run: |
-        echo "📦 NUCLEAR APK VERIFICATION"
+        echo " NUCLEAR APK VERIFICATION"
         echo "==========================="
         
         if [ -d "bin" ]; then
-          echo "📁 bin directory:"
+          echo " bin directory:"
           ls -la bin/
           
           if ls bin/*.apk 1> /dev/null 2>&1; then
-            echo "☢️ NUCLEAR APK SUCCESS!"
+            echo " NUCLEAR APK SUCCESS!"
             for apk in bin/*.apk; do
-              echo "📱 APK: $apk ($(du -h "$apk" | cut -f1))"
+              echo " APK: $apk ($(du -h "$apk" | cut -f1))"
               file "$apk"
             done
           else
-            echo "❌ No APK in bin/"
+            echo " No APK in bin/"
           fi
         else
-          echo "❌ No bin directory"
-          echo "📁 Current contents:"
+          echo " No bin directory"
+          echo " Current contents:"
           ls -la
         fi
 
-    - name: 📤 Upload Nuclear APK
+    - name:  Upload Nuclear APK
       if: success()
       uses: actions/upload-artifact@v4
       with:
@@ -328,7 +328,7 @@ EOF
         path: bin/*.apk
         retention-days: 30
 
-    - name: 📤 Upload Nuclear Logs
+    - name:  Upload Nuclear Logs
       if: always()
       uses: actions/upload-artifact@v4
       with:
@@ -336,23 +336,23 @@ EOF
         path: build_log_*.txt
         retention-days: 7
 
-    - name: ☢️ Nuclear Summary
+    - name:  Nuclear Summary
       if: always()
       run: |
-        echo "## ☢️ Nuclear Android Build v6 Summary" >> $GITHUB_STEP_SUMMARY
+        echo "##  Nuclear Android Build v6 Summary" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
         
         if ls bin/*.apk 1> /dev/null 2>&1; then
-          echo "### ☢️ NUCLEAR SUCCESS!" >> $GITHUB_STEP_SUMMARY
+          echo "###  NUCLEAR SUCCESS!" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "✅ **APK Generated with Nuclear Strategy!**" >> $GITHUB_STEP_SUMMARY
+          echo " **APK Generated with Nuclear Strategy!**" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Nuclear APK:**" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
           ls -la bin/*.apk >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
         else
-          echo "### ☢️ NUCLEAR FAILED" >> $GITHUB_STEP_SUMMARY
+          echo "###  NUCLEAR FAILED" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "Even nuclear strategy failed. This is a fundamental Buildozer issue." >> $GITHUB_STEP_SUMMARY
           
@@ -366,9 +366,11 @@ EOF
         fi
         
         echo "" >> $GITHUB_STEP_SUMMARY
-        echo "### ☢️ Nuclear Strategy" >> $GITHUB_STEP_SUMMARY
+        echo "###  Nuclear Strategy" >> $GITHUB_STEP_SUMMARY
         echo "- **PRE-POPULATE** all Buildozer cache directories" >> $GITHUB_STEP_SUMMARY
         echo "- **COPY** (not symlink) Android SDK/NDK to exact cache locations" >> $GITHUB_STEP_SUMMARY
         echo "- **PRE-DOWNLOAD** Apache ANT to avoid network issues" >> $GITHUB_STEP_SUMMARY
         echo "- **FORCE** all paths to pre-populated cache" >> $GITHUB_STEP_SUMMARY
         echo "- **NUCLEAR** environment variables override" >> $GITHUB_STEP_SUMMARY
+
+
