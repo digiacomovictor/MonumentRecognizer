@@ -126,12 +126,20 @@ import re
 with open('buildozer.spec', 'r') as f:
     content = f.read()
 
+# Ottieni i percorsi reali dall'ambiente
+import os
+ndk_path = os.environ.get('ANDROID_NDK_ROOT', '')
+sdk_path = os.environ.get('ANDROID_SDK_ROOT', '')
+
+print(f"🔍 NDK Path: {ndk_path}")
+print(f"🔍 SDK Path: {sdk_path}")
+
 # Configurazioni essenziali per NDK pre-installato
 configs = {
     'android.ndk': '21.4.7075529',
     'android.sdk': '31', 
-    'android.ndk_path': '$ANDROID_NDK_ROOT',
-    'android.sdk_path': '$ANDROID_SDK_ROOT',
+    'android.ndk_path': ndk_path,
+    'android.sdk_path': sdk_path,
     'android.enable_androidx': 'True',
     'android.gradle_dependencies': '',
 }
