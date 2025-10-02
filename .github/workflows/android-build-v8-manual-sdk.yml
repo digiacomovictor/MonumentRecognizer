@@ -50,20 +50,20 @@ jobs:
         # Install required packages
         sdkmanager "platform-tools" "platforms;android-31" "build-tools;31.0.0"
         
-        # Download and install NDK 21.4.7075529 manually
-        echo "Installing NDK 21.4.7075529..."
-        wget -q https://dl.google.com/android/repository/android-ndk-r21e-linux-x86_64.zip -O ndk21.zip
-        unzip -q ndk21.zip -d $ANDROID_HOME
-        mv $ANDROID_HOME/android-ndk-r21e $ANDROID_HOME/ndk-r21e
-        rm ndk21.zip
+        # Download and install NDK 25b (minimum supported by python-for-android)
+        echo "Installing NDK 25b..."
+        wget -q https://dl.google.com/android/repository/android-ndk-r25b-linux.zip -O ndk25.zip
+        unzip -q ndk25.zip -d $ANDROID_HOME
+        mv $ANDROID_HOME/android-ndk-r25b $ANDROID_HOME/ndk-r25b
+        rm ndk25.zip
         
         echo "Android SDK setup complete"
         echo "ANDROID_HOME: $ANDROID_HOME"
-        echo "NDK: $ANDROID_HOME/ndk-r21e"
+        echo "NDK: $ANDROID_HOME/ndk-r25b"
         
         # Export for next steps
         echo "ANDROID_HOME=$ANDROID_HOME" >> $GITHUB_ENV
-        echo "ANDROID_NDK_ROOT=$ANDROID_HOME/ndk-r21e" >> $GITHUB_ENV
+        echo "ANDROID_NDK_ROOT=$ANDROID_HOME/ndk-r25b" >> $GITHUB_ENV
         echo "ANDROID_SDK_ROOT=$ANDROID_HOME" >> $GITHUB_ENV
         echo "PATH=$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$PATH" >> $GITHUB_ENV
 
@@ -108,8 +108,8 @@ jobs:
         ln -sf .buildozer/android/platform/android-sdk/cmdline-tools/latest/bin/sdkmanager .buildozer/android/platform/android-sdk/tools/bin/sdkmanager
         
         # Copy NDK with the specific name Buildozer expects
-        cp -r $ANDROID_NDK_ROOT ~/.buildozer/android/platform/android-ndk-r21.4.7075529
-        cp -r $ANDROID_NDK_ROOT .buildozer/android/platform/android-ndk-r21.4.7075529
+        cp -r $ANDROID_NDK_ROOT ~/.buildozer/android/platform/android-ndk-r25b
+        cp -r $ANDROID_NDK_ROOT .buildozer/android/platform/android-ndk-r25b
         
         echo "✅ Buildozer cache populated"
         
@@ -139,13 +139,13 @@ jobs:
         cp buildozer.spec buildozer.spec.backup
         
         # Configure buildozer.spec with sed
-        sed -i 's|^#*android\.ndk.*=.*|android.ndk = 21.4.7075529|g' buildozer.spec
+        sed -i 's|^#*android\.ndk.*=.*|android.ndk = 25b|g' buildozer.spec
         sed -i 's|^#*android\.api.*=.*|android.api = 31|g' buildozer.spec
         sed -i 's|^#*android\.minapi.*=.*|android.minapi = 21|g' buildozer.spec
         sed -i 's|^#*android\.sdk.*=.*|android.sdk = 31|g' buildozer.spec
         
         # Add paths to cache
-        echo "android.ndk_path = ~/.buildozer/android/platform/android-ndk-r21.4.7075529" >> buildozer.spec
+        echo "android.ndk_path = ~/.buildozer/android/platform/android-ndk-r25b" >> buildozer.spec
         echo "android.sdk_path = ~/.buildozer/android/platform/android-sdk" >> buildozer.spec
         echo "android.skip_update = True" >> buildozer.spec
         echo "android.enable_androidx = True" >> buildozer.spec
@@ -159,7 +159,7 @@ jobs:
         
         # Set environment variables
         export ANDROIDSDK=~/.buildozer/android/platform/android-sdk
-        export ANDROIDNDK=~/.buildozer/android/platform/android-ndk-r21.4.7075529
+        export ANDROIDNDK=~/.buildozer/android/platform/android-ndk-r25b
         export ANDROIDAPI="31"
         export NDKAPI="21"
         
@@ -258,5 +258,5 @@ jobs:
         echo "### 🔧 v8 Strategy Used" >> $GITHUB_STEP_SUMMARY
         echo "- **Manual Android SDK** setup (bypassed broken android-actions)" >> $GITHUB_STEP_SUMMARY
         echo "- **Direct download** of working command line tools" >> $GITHUB_STEP_SUMMARY
-        echo "- **Force NDK 21.4.7075529** installation" >> $GITHUB_STEP_SUMMARY
+        echo "- **Force NDK 25b** installation (minimum supported by python-for-android)" >> $GITHUB_STEP_SUMMARY
         echo "- **Pre-populate** Buildozer cache with correct paths" >> $GITHUB_STEP_SUMMARY
