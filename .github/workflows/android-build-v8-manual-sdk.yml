@@ -101,6 +101,12 @@ jobs:
         cp -r $ANDROID_HOME ~/.buildozer/android/platform/android-sdk
         cp -r $ANDROID_HOME .buildozer/android/platform/android-sdk
         
+        # Create sdkmanager symlink where Buildozer expects it
+        mkdir -p ~/.buildozer/android/platform/android-sdk/tools/bin
+        mkdir -p .buildozer/android/platform/android-sdk/tools/bin
+        ln -sf ~/.buildozer/android/platform/android-sdk/cmdline-tools/latest/bin/sdkmanager ~/.buildozer/android/platform/android-sdk/tools/bin/sdkmanager
+        ln -sf .buildozer/android/platform/android-sdk/cmdline-tools/latest/bin/sdkmanager .buildozer/android/platform/android-sdk/tools/bin/sdkmanager
+        
         # Copy NDK with the specific name Buildozer expects
         cp -r $ANDROID_NDK_ROOT ~/.buildozer/android/platform/android-ndk-r21.4.7075529
         cp -r $ANDROID_NDK_ROOT .buildozer/android/platform/android-ndk-r21.4.7075529
