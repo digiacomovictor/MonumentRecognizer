@@ -1,0 +1,297 @@
+name: Android Build v6 CLEAN
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+
+    - name: Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+
+    - name: Setup Java
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'temurin'
+        java-version: '17'
+
+    - name: Setup Android SDK and NDK
+      uses: android-actions/setup-android@v3
+      with:
+        cmdline-tools-version: '9.0'
+        accept-android-sdk-licenses: true
+        packages: |
+          platform-tools
+          platforms;android-31
+          build-tools;31.0.0
+          ndk;21.4.7075529
+
+    - name: Find and Fix Android Installation
+      run: |
+        echo "FINDING ANDROID INSTALLATION"
+        echo "============================="
+        
+        # Search for Android SDK
+        ANDROID_HOME=""
+        for path in /usr/local/lib/android/sdk /opt/android-sdk-linux $HOME/android-sdk /usr/local/android-sdk; do
+          if [ -d "$path" ]; then
+            ANDROID_HOME="$path"
+            break
+          fi
+        done
+        
+        if [ -z "$ANDROID_HOME" ]; then
+          ANDROID_HOME=$(find /usr/local -name "*android*sdk*" -type d 2>/dev/null | head -1)
+        fi
+        if [ -z "$ANDROID_HOME" ]; then
+          ANDROID_HOME=$(find /opt -name "*android*" -type d 2>/dev/null | head -1)
+        fi
+        
+        echo "Android SDK found at: $ANDROID_HOME"
+        
+        # Force download correct NDK version if needed
+        ANDROID_NDK=""
+        if [ -n "$ANDROID_HOME" ]; then
+          ANDROID_NDK="$ANDROID_HOME/ndk/21.4.7075529"
+        fi
+        
+        # Download NDK 21.4.7075529 if not found
+        if [ ! -d "$ANDROID_NDK" ]; then
+          echo "NDK 21.4.7075529 not found, downloading..."
+          mkdir -p "$ANDROID_HOME/ndk"
+          wget -q "https://dl.google.com/android/repository/android-ndk-r21e-linux-x86_64.zip" -O ndk21.zip
+          unzip -q ndk21.zip -d "$ANDROID_HOME/ndk/"
+          mv "$ANDROID_HOME/ndk/android-ndk-r21e" "$ANDROID_HOME/ndk/21.4.7075529"
+          rm ndk21.zip
+          echo "NDK 21.4.7075529 installed successfully"
+        fi
+        
+        echo "Android NDK at: $ANDROID_NDK"
+        
+        # Export for next steps
+        echo "ANDROID_HOME=$ANDROID_HOME" >> $GITHUB_ENV
+        echo "ANDROID_NDK_ROOT=$ANDROID_NDK" >> $GITHUB_ENV
+        echo "ANDROID_SDK_ROOT=$ANDROID_HOME" >> $GITHUB_ENV
+
+    - name: NUCLEAR Pre-populate Buildozer Cache
+      run: |
+        echo "NUCLEAR PRE-POPULATING BUILDOZER CACHE"
+        echo "======================================="
+        
+        # Create cache directories
+        mkdir -p ~/.buildozer/android/platform
+        mkdir -p ~/.buildozer/cache
+        mkdir -p .buildozer/android/platform
+        mkdir -p .buildozer/android/app
+        
+        echo "Copying Android SDK and NDK to cache..."
+        
+        # Copy SDK
+        if [ -d "$ANDROID_HOME" ]; then
+          cp -r "$ANDROID_HOME" ~/.buildozer/android/platform/android-sdk
+          cp -r "$ANDROID_HOME" .buildozer/android/platform/android-sdk
+          echo "Android SDK copied to cache"
+        fi
+        
+        # Copy NDK
+        if [ -d "$ANDROID_NDK_ROOT" ]; then
+          cp -r "$ANDROID_NDK_ROOT" ~/.buildozer/android/platform/android-ndk-r21.4.7075529
+          cp -r "$ANDROID_NDK_ROOT" .buildozer/android/platform/android-ndk-r21.4.7075529
+          echo "Android NDK copied to cache"
+        fi
+        
+        # Pre-download Apache ANT
+        echo "Pre-downloading Apache ANT..."
+        mkdir -p ~/.buildozer/android/platform/apache-ant-1.9.4
+        wget -q https://archive.apache.org/dist/ant/binaries/apache-ant-1.9.4-bin.tar.gz -O ant.tar.gz
+        tar -xzf ant.tar.gz -C ~/.buildozer/android/platform/
+        rm ant.tar.gz
+        echo "Apache ANT pre-installed"
+
+    - name: Install Build Dependencies
+      run: |
+        sudo apt-get update -qq
+        sudo apt-get install -y --no-install-recommends \
+          build-essential git unzip python3-dev zlib1g-dev \
+          libncurses5-dev libncursesw5-dev libtinfo5 cmake \
+          libffi-dev libssl-dev automake autoconf libtool pkg-config
+        
+        python -m pip install --upgrade pip setuptools wheel
+        pip install buildozer cython==0.29.33
+        
+        if [ -f requirements.txt ]; then
+          pip install -r requirements.txt
+        fi
+
+    - name: Configure Buildozer
+      run: |
+        echo "CONFIGURING BUILDOZER SPEC"
+        echo "=========================="
+        
+        cp buildozer.spec buildozer.spec.backup
+        
+        # Create configuration script
+        cat > configure_buildozer.py << 'SCRIPT_END'
+import re
+import os
+
+# Read current buildozer.spec
+with open('buildozer.spec', 'r') as f:
+    content = f.read()
+
+# Configuration settings
+configs = {
+    'android.sdk_path': os.path.expanduser('~/.buildozer/android/platform/android-sdk'),
+    'android.ndk_path': os.path.expanduser('~/.buildozer/android/platform/android-ndk-r21.4.7075529'),
+    'android.ndk': '21.4.7075529',
+    'android.api': '31',
+    'android.minapi': '21', 
+    'android.sdk': '31',
+    'android.ant_path': os.path.expanduser('~/.buildozer/android/platform/apache-ant-1.9.4'),
+    'android.enable_androidx': 'True',
+    'android.skip_update': 'True',
+    'requirements': 'kivy,kivymd',
+    'source.dir': '.',
+}
+
+print("Applying configurations:")
+for key, value in configs.items():
+    print(f"  {key} = {value}")
+
+# Apply configurations
+for key, value in configs.items():
+    pattern = rf'^#?\s*{re.escape(key)}\s*=.*$'
+    content = re.sub(pattern, '', content, flags=re.MULTILINE)
+    
+    if '[app]' in content:
+        replacement = f'{key} = {value}'
+        content = content.replace('[app]', f'[app]\n{replacement}')
+
+# Write updated spec
+with open('buildozer.spec', 'w') as f:
+    f.write(content)
+
+print("Buildozer spec configured successfully")
+SCRIPT_END
+        
+        python3 configure_buildozer.py
+        echo "Configuration completed"
+
+    - name: Verify Cache Setup
+      run: |
+        echo "VERIFYING CACHE SETUP"
+        echo "===================="
+        
+        if [ -d ~/.buildozer/android/platform/android-sdk ]; then
+          echo "SDK in cache: $(du -sh ~/.buildozer/android/platform/android-sdk 2>/dev/null || echo 'present')"
+        else
+          echo "ERROR: SDK missing from cache"
+        fi
+        
+        if [ -d ~/.buildozer/android/platform/android-ndk-r21.4.7075529 ]; then
+          echo "NDK in cache: $(du -sh ~/.buildozer/android/platform/android-ndk-r21.4.7075529 2>/dev/null || echo 'present')"
+        else
+          echo "ERROR: NDK missing from cache"
+        fi
+
+    - name: NUCLEAR Android Build
+      timeout-minutes: 90
+      run: |
+        echo "STARTING NUCLEAR BUILDOZER BUILD"
+        echo "================================"
+        
+        # Set environment variables
+        export ANDROIDSDK=~/.buildozer/android/platform/android-sdk
+        export ANDROIDNDK=~/.buildozer/android/platform/android-ndk-r21.4.7075529
+        export ANDROIDAPI="31"
+        export NDKAPI="21"
+        export ANT_HOME=~/.buildozer/android/platform/apache-ant-1.9.4
+        
+        echo "Environment:"
+        echo "  ANDROIDSDK: $ANDROIDSDK"
+        echo "  ANDROIDNDK: $ANDROIDNDK"
+        echo "  ANT_HOME: $ANT_HOME"
+        
+        echo "Starting build..."
+        if buildozer -v android debug 2>&1 | tee build_log_nuclear.txt; then
+          echo "BUILD SUCCESS!"
+        else
+          echo "Build failed"
+          echo "Last 30 lines of log:"
+          tail -n 30 build_log_nuclear.txt
+          exit 1
+        fi
+
+    - name: Verify APK Creation
+      run: |
+        echo "VERIFYING APK CREATION"
+        echo "====================="
+        
+        if [ -d "bin" ]; then
+          echo "bin directory contents:"
+          ls -la bin/
+          
+          if ls bin/*.apk 1> /dev/null 2>&1; then
+            echo "SUCCESS: APK files found!"
+            for apk in bin/*.apk; do
+              echo "APK: $apk ($(du -h "$apk" | cut -f1))"
+            done
+          else
+            echo "ERROR: No APK files in bin/"
+          fi
+        else
+          echo "ERROR: bin directory not found"
+        fi
+
+    - name: Upload APK
+      if: success()
+      uses: actions/upload-artifact@v4
+      with:
+        name: MonumentRecognizer-NUCLEAR-APK-CLEAN
+        path: bin/*.apk
+        retention-days: 30
+
+    - name: Upload Build Logs
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: build-logs-nuclear-clean
+        path: build_log_*.txt
+        retention-days: 7
+
+    - name: Build Summary
+      if: always()
+      run: |
+        echo "## Android Build v6 CLEAN Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        
+        if ls bin/*.apk 1> /dev/null 2>&1; then
+          echo "### SUCCESS!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "APK generated successfully!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**APK Details:**" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          ls -la bin/*.apk >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+        else
+          echo "### FAILED" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Build failed. Check logs for details." >> $GITHUB_STEP_SUMMARY
+          
+          if [ -f build_log_nuclear.txt ]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**Last Build Output:**" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            tail -n 15 build_log_nuclear.txt >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+          fi
+        fi
