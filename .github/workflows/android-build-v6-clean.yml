@@ -138,51 +138,16 @@ jobs:
         
         cp buildozer.spec buildozer.spec.backup
         
-        # Create configuration script
-        cat > configure_buildozer.py << 'SCRIPT_END'
-import re
-import os
-
-# Read current buildozer.spec
-with open('buildozer.spec', 'r') as f:
-    content = f.read()
-
-# Configuration settings
-configs = {
-    'android.sdk_path': os.path.expanduser('~/.buildozer/android/platform/android-sdk'),
-    'android.ndk_path': os.path.expanduser('~/.buildozer/android/platform/android-ndk-r21.4.7075529'),
-    'android.ndk': '21.4.7075529',
-    'android.api': '31',
-    'android.minapi': '21', 
-    'android.sdk': '31',
-    'android.ant_path': os.path.expanduser('~/.buildozer/android/platform/apache-ant-1.9.4'),
-    'android.enable_androidx': 'True',
-    'android.skip_update': 'True',
-    'requirements': 'kivy,kivymd',
-    'source.dir': '.',
-}
-
-print("Applying configurations:")
-for key, value in configs.items():
-    print(f"  {key} = {value}")
-
-# Apply configurations
-for key, value in configs.items():
-    pattern = rf'^#?\s*{re.escape(key)}\s*=.*$'
-    content = re.sub(pattern, '', content, flags=re.MULTILINE)
-    
-    if '[app]' in content:
-        replacement = f'{key} = {value}'
-        content = content.replace('[app]', f'[app]\n{replacement}')
-
-# Write updated spec
-with open('buildozer.spec', 'w') as f:
-    f.write(content)
-
-print("Buildozer spec configured successfully")
-SCRIPT_END
-        
-        python3 configure_buildozer.py
+        # Use direct Python commands instead of here-doc to avoid YAML issues
+        python3 -c "import re, os
+        with open('buildozer.spec', 'r') as f: content = f.read()
+        configs = {'android.sdk_path': os.path.expanduser('~/.buildozer/android/platform/android-sdk'), 'android.ndk_path': os.path.expanduser('~/.buildozer/android/platform/android-ndk-r21.4.7075529'), 'android.ndk': '21.4.7075529', 'android.api': '31', 'android.minapi': '21', 'android.sdk': '31', 'android.ant_path': os.path.expanduser('~/.buildozer/android/platform/apache-ant-1.9.4'), 'android.enable_androidx': 'True', 'android.skip_update': 'True', 'requirements': 'kivy,kivymd', 'source.dir': '.'}
+        for key, value in configs.items():
+            pattern = rf'^#?\s*{re.escape(key)}\s*=.*$'
+            content = re.sub(pattern, '', content, flags=re.MULTILINE)
+            if '[app]' in content: content = content.replace('[app]', f'[app]\n{key} = {value}')
+        with open('buildozer.spec', 'w') as f: f.write(content)
+        print('Buildozer configured successfully')"
         echo "Configuration completed"
 
     - name: Verify Cache Setup
