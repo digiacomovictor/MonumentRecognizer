@@ -33,6 +33,7 @@ jobs:
           platforms;android-31
           build-tools;31.0.0
           ndk;21.4.7075529
+        cache-disabled: true
 
     - name: 🔍 Find Android Installation
       id: android_paths
@@ -62,11 +63,11 @@ jobs:
         
         echo "🔍 Android SDK found at: $ANDROID_HOME"
         
-        # Find NDK
+        # Find NDK - FORCE correct version or download
         ANDROID_NDK=""
         if [ -n "$ANDROID_HOME" ]; then
-          # Look for NDK in SDK
-          for ndk_path in "$ANDROID_HOME/ndk/21.4.7075529" "$ANDROID_HOME/ndk-bundle" "$ANDROID_HOME/ndk/21.4.7075529"*; do
+          # Look for EXACT NDK 21.4.7075529
+          for ndk_path in "$ANDROID_HOME/ndk/21.4.7075529" "$ANDROID_HOME/ndk-bundle"; do
             if [ -d "$ndk_path" ]; then
               ANDROID_NDK="$ndk_path"
               break
@@ -74,12 +75,19 @@ jobs:
           done
         fi
         
-        # Alternative NDK search
-        if [ -z "$ANDROID_NDK" ]; then
-          ANDROID_NDK=$(find /usr/local -name "*ndk*21.4.7075529*" -type d 2>/dev/null | head -1)
-        fi
-        if [ -z "$ANDROID_NDK" ]; then
-          ANDROID_NDK=$(find /opt -name "*ndk*" -type d 2>/dev/null | head -1)
+        # If NDK 21.4.7075529 not found, download it manually
+        if [ -z "$ANDROID_NDK" ] || [ ! -d "$ANDROID_NDK" ]; then
+          echo "⚠️  NDK 21.4.7075529 not found, downloading manually..."
+          mkdir -p "$ANDROID_HOME/ndk"
+          
+          # Download NDK 21.4.7075529 directly
+          wget -q "https://dl.google.com/android/repository/android-ndk-r21e-linux-x86_64.zip" -O ndk21.zip
+          unzip -q ndk21.zip -d "$ANDROID_HOME/ndk/"
+          mv "$ANDROID_HOME/ndk/android-ndk-r21e" "$ANDROID_HOME/ndk/21.4.7075529"
+          rm ndk21.zip
+          
+          ANDROID_NDK="$ANDROID_HOME/ndk/21.4.7075529"
+          echo "✅ NDK 21.4.7075529 downloaded and installed"
         fi
         
         echo "🔍 Android NDK found at: $ANDROID_NDK"
