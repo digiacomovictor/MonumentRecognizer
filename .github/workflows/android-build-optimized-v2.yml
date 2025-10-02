@@ -1,0 +1,307 @@
+name: Android Build - Optimized v2
+on:
+  workflow_dispatch: # Solo trigger manuale per ora
+  # push:
+  #   branches: [ main, master ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90  # Aumentato timeout del job
+    
+    steps:
+    - name: 🚀 Checkout Repository
+      uses: actions/checkout@v4
+
+    - name: 🐍 Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+
+    - name: ☕ Setup Java
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'temurin'
+        java-version: '17'
+
+    - name: 🔧 Setup Android SDK & NDK
+      uses: android-actions/setup-android@v3
+      with:
+        api-level: 31
+        build-tools-version: 31.0.0
+        ndk-version: 21.4.7075529
+
+    - name: 📋 Cache Python dependencies
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pip
+        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+        restore-keys: |
+          ${{ runner.os }}-pip-
+
+    - name: 📋 Cache Buildozer
+      uses: actions/cache@v3
+      with:
+        path: |
+          ~/.buildozer
+          .buildozer
+        key: ${{ runner.os }}-buildozer-${{ hashFiles('buildozer.spec') }}-v2
+        restore-keys: |
+          ${{ runner.os }}-buildozer-
+
+    - name: 🛠️ Install Essential System Dependencies
+      timeout-minutes: 15  # Timeout specifico per questo step
+      run: |
+        echo "🔄 Installing minimal essential dependencies..."
+        sudo apt-get update -qq
+        
+        # Installa solo i pacchetti essenziali per Buildozer
+        sudo apt-get install -y --no-install-recommends \
+          python3-pip \
+          build-essential \
+          git \
+          unzip \
+          openjdk-17-jdk \
+          python3-setuptools \
+          python3-dev \
+          zlib1g-dev \
+          libncurses5-dev \
+          libncursesw5-dev \
+          libtinfo5 \
+          cmake \
+          libffi-dev \
+          libssl-dev \
+          automake \
+          autoconf \
+          libtool \
+          pkg-config
+        
+        echo "✅ Essential dependencies installed"
+
+    - name: 🛠️ Install Python Build Tools
+      timeout-minutes: 10
+      run: |
+        echo "🔄 Installing Python build tools..."
+        python -m pip install --upgrade pip setuptools wheel
+        pip install buildozer cython==0.29.33
+        
+        # Installa requirements se presenti (con timeout)
+        if [ -f requirements.txt ]; then
+          echo "📋 Installing requirements.txt..."
+          timeout 300 pip install -r requirements.txt || echo "⚠️ Some requirements may have failed"
+        fi
+        
+        echo "✅ Python tools installed"
+
+    - name: 🔍 Environment Verification
+      run: |
+        echo "🔍 === ENVIRONMENT CHECK ==="
+        echo "Python: $(python --version)"
+        echo "Pip: $(pip --version)"
+        echo "Java: $(java -version 2>&1 | head -1)"
+        echo "Buildozer: $(buildozer --version)"
+        
+        echo "🔍 Android SDK: $ANDROID_SDK_ROOT"
+        echo "🔍 Android NDK: $ANDROID_NDK_ROOT"
+        
+        # Verifica NDK
+        if [ -d "$ANDROID_NDK_ROOT" ]; then
+          echo "✅ NDK trovato: $(ls -la $ANDROID_NDK_ROOT | head -5)"
+        else
+          echo "❌ NDK non trovato in $ANDROID_NDK_ROOT"
+        fi
+
+    - name: ⚙️ Configure Buildozer for NDK
+      run: |
+        echo "⚙️ Configuring buildozer.spec for pre-installed NDK..."
+        
+        # Backup originale
+        cp buildozer.spec buildozer.spec.backup
+        
+        # Configura buildozer.spec via Python (più affidabile)
+        python3 << 'EOF'
+import re
+
+# Leggi buildozer.spec
+with open('buildozer.spec', 'r') as f:
+    content = f.read()
+
+# Configurazioni essenziali per NDK pre-installato
+configs = {
+    'android.ndk': '21.4.7075529',
+    'android.sdk': '31', 
+    'android.ndk_path': '$ANDROID_NDK_ROOT',
+    'android.sdk_path': '$ANDROID_SDK_ROOT',
+    'android.enable_androidx': 'True',
+    'android.gradle_dependencies': '',
+}
+
+# Applica configurazioni
+for key, value in configs.items():
+    pattern = rf'^#?\s*{re.escape(key)}\s*=.*$'
+    replacement = f'{key} = {value}'
+    
+    if re.search(pattern, content, re.MULTILINE):
+        content = re.sub(pattern, replacement, content, flags=re.MULTILINE)
+    else:
+        # Aggiungi se non esiste
+        if '[app]' in content:
+            content = content.replace('[app]', f'[app]\n{replacement}')
+
+# Salva configurazione modificata
+with open('buildozer.spec', 'w') as f:
+    f.write(content)
+
+print("✅ Buildozer.spec configured")
+EOF
+
+        echo "📝 Buildozer.spec changes:"
+        diff buildozer.spec.backup buildozer.spec || echo "✅ Configuration applied"
+
+    - name: 🏗️ Prepare Build Environment
+      run: |
+        echo "🏗️ Creating build directories..."
+        mkdir -p ~/.buildozer/android/platform
+        mkdir -p .buildozer/android/{platform,app}
+        mkdir -p .buildozer/applibs
+        
+        # Imposta permessi
+        chmod -R 755 ~/.buildozer .buildozer 2>/dev/null || true
+        
+        echo "✅ Build environment ready"
+
+    - name: 🔄 Buildozer Android Debug (with Smart Retry)
+      timeout-minutes: 60  # Timeout per questo step specifico
+      run: |
+        echo "🔄 Starting Buildozer Android Debug Build..."
+        
+        # Script per retry intelligente
+        build_success=false
+        max_attempts=2
+        
+        for attempt in $(seq 1 $max_attempts); do
+          echo "📋 === ATTEMPT $attempt of $max_attempts ==="
+          
+          # Pulizia pre-tentativo (solo se non è il primo)
+          if [ $attempt -gt 1 ]; then
+            echo "🧹 Cleaning up for retry..."
+            buildozer android clean 2>/dev/null || true
+            rm -rf .buildozer/android/app/* 2>/dev/null || true
+            sleep 5
+          fi
+          
+          # Prova la build con timeout
+          echo "🚀 Running: buildozer android debug"
+          if timeout 3000 buildozer android debug 2>&1 | tee build_log_attempt_${attempt}.txt; then
+            echo "✅ BUILD SUCCESS on attempt $attempt!"
+            build_success=true
+            break
+          else
+            exit_code=$?
+            echo "⚠️  Build attempt $attempt failed with exit code: $exit_code"
+            
+            # Analizza l'errore dai log
+            if [ -f build_log_attempt_${attempt}.txt ]; then
+              echo "🔍 Last 20 lines of build log:"
+              tail -n 20 build_log_attempt_${attempt}.txt
+              
+              # Cerca errori specifici
+              if grep -q "No space left" build_log_attempt_${attempt}.txt; then
+                echo "❌ DISK SPACE ISSUE detected"
+                df -h
+                break  # Non retry per problemi di spazio
+              elif grep -q "java.lang.OutOfMemoryError" build_log_attempt_${attempt}.txt; then
+                echo "❌ MEMORY ISSUE detected"
+                free -h
+                break  # Non retry per problemi di memoria
+              fi
+            fi
+            
+            if [ $attempt -eq $max_attempts ]; then
+              echo "❌ All build attempts failed"
+              build_success=false
+            else
+              echo "⏳ Waiting 10 seconds before retry..."
+              sleep 10
+            fi
+          fi
+        done
+        
+        # Check finale
+        if [ "$build_success" = true ]; then
+          echo "🎉 BUILD COMPLETED SUCCESSFULLY!"
+          
+          # Verifica APK generata
+          if ls bin/*.apk 1> /dev/null 2>&1; then
+            echo "📱 APK files generated:"
+            ls -la bin/*.apk
+          else
+            echo "⚠️  No APK files found in bin/"
+          fi
+        else
+          echo "❌ BUILD FAILED after all attempts"
+          exit 1
+        fi
+
+    - name: 📤 Upload APK
+      if: success()
+      uses: actions/upload-artifact@v4
+      with:
+        name: MonumentRecognizer-APK-v2
+        path: bin/*.apk
+        retention-days: 30
+
+    - name: 📤 Upload Build Logs
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: build-logs-v2
+        path: build_log_*.txt
+        retention-days: 7
+
+    - name: 📊 Build Summary
+      if: always()
+      run: |
+        echo "## 📊 Android Build Summary v2" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        
+        # Status
+        if ls bin/*.apk 1> /dev/null 2>&1; then
+          echo "### ✅ Build Successful!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "🎉 APK generated successfully!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "📱 **Generated APK files:**" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          ls -la bin/*.apk >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+        else
+          echo "### ❌ Build Failed" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "🔍 Check the build logs for details." >> $GITHUB_STEP_SUMMARY
+          
+          # Mostra ultimi errori se disponibili
+          if ls build_log_*.txt 1> /dev/null 2>&1; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**Last errors from build log:**" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            tail -n 10 build_log_*.txt | head -20 >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+          fi
+        fi
+        
+        # Environment info
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### 🔧 Environment Info" >> $GITHUB_STEP_SUMMARY
+        echo "- **Python:** $(python --version)" >> $GITHUB_STEP_SUMMARY
+        echo "- **Java:** $(java -version 2>&1 | head -1)" >> $GITHUB_STEP_SUMMARY
+        echo "- **Buildozer:** $(buildozer --version)" >> $GITHUB_STEP_SUMMARY
+        echo "- **NDK:** $ANDROID_NDK_ROOT" >> $GITHUB_STEP_SUMMARY
+        echo "- **SDK:** $ANDROID_SDK_ROOT" >> $GITHUB_STEP_SUMMARY
+        
+        # Disk usage
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### 💾 Disk Usage" >> $GITHUB_STEP_SUMMARY
+        echo '```' >> $GITHUB_STEP_SUMMARY
+        df -h >> $GITHUB_STEP_SUMMARY
+        echo '```' >> $GITHUB_STEP_SUMMARY
