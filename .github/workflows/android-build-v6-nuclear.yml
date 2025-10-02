@@ -1,4 +1,4 @@
-name: ☢️ Android Build v6 - NUCLEAR Strategy
+name: Android Build v6 - NUCLEAR Strategy
 
 on:
   workflow_dispatch:
@@ -116,9 +116,9 @@ jobs:
         echo "ANDROID_NDK_ROOT=$ANDROID_NDK" >> $GITHUB_ENV
         echo "ANDROID_SDK_ROOT=$ANDROID_HOME" >> $GITHUB_ENV
 
-    - name: ☢️ NUCLEAR: Pre-populate Buildozer Cache
+    - name: NUCLEAR Pre-populate Buildozer Cache
       run: |
-        echo "☢️ NUCLEAR: PRE-POPULATING BUILDOZER CACHE"
+        echo "NUCLEAR: PRE-POPULATING BUILDOZER CACHE"
         echo "==========================================="
         
         # Create all Buildozer cache directories EXACTLY where it expects them
@@ -134,21 +134,21 @@ jobs:
         
         # NUCLEAR STRATEGY: Copy (not link) Android SDK/NDK to Buildozer cache
         if [ -d "$ANDROID_HOME" ]; then
-          echo "☢️ COPYING Android SDK to Buildozer cache..."
+          echo "NUCLEAR: COPYING Android SDK to Buildozer cache..."
           cp -r "$ANDROID_HOME" ~/.buildozer/android/platform/android-sdk
           cp -r "$ANDROID_HOME" .buildozer/android/platform/android-sdk
           echo "✅ Android SDK copied to buildozer cache"
         fi
         
         if [ -d "$ANDROID_NDK_ROOT" ]; then
-          echo "☢️ COPYING Android NDK to Buildozer cache..."
+          echo "NUCLEAR: COPYING Android NDK to Buildozer cache..."
           cp -r "$ANDROID_NDK_ROOT" ~/.buildozer/android/platform/android-ndk-r21.4.7075529
           cp -r "$ANDROID_NDK_ROOT" .buildozer/android/platform/android-ndk-r21.4.7075529
           echo "✅ Android NDK copied to buildozer cache"
         fi
         
         # Pre-download Apache ANT to avoid download issues
-        echo "☢️ PRE-DOWNLOADING Apache ANT..."
+        echo "NUCLEAR: PRE-DOWNLOADING Apache ANT..."
         mkdir -p ~/.buildozer/android/platform/apache-ant-1.9.4
         wget -q https://archive.apache.org/dist/ant/binaries/apache-ant-1.9.4-bin.tar.gz -O ant.tar.gz
         tar -xzf ant.tar.gz -C ~/.buildozer/android/platform/
