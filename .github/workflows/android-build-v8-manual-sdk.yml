@@ -1,0 +1,256 @@
+name: Android Build v8 MANUAL SDK
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+
+    - name: Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+
+    - name: Setup Java
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'temurin'
+        java-version: '17'
+
+    - name: Manual Android SDK Setup
+      run: |
+        echo "Setting up Android SDK manually..."
+        
+        # Create Android SDK directory
+        export ANDROID_HOME=$HOME/android-sdk
+        mkdir -p $ANDROID_HOME
+        
+        # Download and install command line tools (latest working version)
+        wget -q https://dl.google.com/android/repository/commandlinetools-linux-8512546_latest.zip -O cmdtools.zip
+        unzip -q cmdtools.zip -d $ANDROID_HOME
+        mv $ANDROID_HOME/cmdline-tools $ANDROID_HOME/cmdline-tools-temp
+        mkdir -p $ANDROID_HOME/cmdline-tools/latest
+        mv $ANDROID_HOME/cmdline-tools-temp/* $ANDROID_HOME/cmdline-tools/latest/
+        rmdir $ANDROID_HOME/cmdline-tools-temp
+        rm cmdtools.zip
+        
+        # Set PATH
+        export PATH=$ANDROID_HOME/cmdline-tools/latest/bin:$PATH
+        export PATH=$ANDROID_HOME/platform-tools:$PATH
+        
+        # Accept licenses
+        yes | sdkmanager --licenses || true
+        
+        # Install required packages
+        sdkmanager "platform-tools" "platforms;android-31" "build-tools;31.0.0"
+        
+        # Download and install NDK 21.4.7075529 manually
+        echo "Installing NDK 21.4.7075529..."
+        wget -q https://dl.google.com/android/repository/android-ndk-r21e-linux-x86_64.zip -O ndk21.zip
+        unzip -q ndk21.zip -d $ANDROID_HOME
+        mv $ANDROID_HOME/android-ndk-r21e $ANDROID_HOME/ndk-r21e
+        rm ndk21.zip
+        
+        echo "Android SDK setup complete"
+        echo "ANDROID_HOME: $ANDROID_HOME"
+        echo "NDK: $ANDROID_HOME/ndk-r21e"
+        
+        # Export for next steps
+        echo "ANDROID_HOME=$ANDROID_HOME" >> $GITHUB_ENV
+        echo "ANDROID_NDK_ROOT=$ANDROID_HOME/ndk-r21e" >> $GITHUB_ENV
+        echo "ANDROID_SDK_ROOT=$ANDROID_HOME" >> $GITHUB_ENV
+        echo "PATH=$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$PATH" >> $GITHUB_ENV
+
+    - name: Verify Android Installation
+      run: |
+        echo "Verifying Android installation..."
+        echo "ANDROID_HOME: $ANDROID_HOME"
+        echo "ANDROID_NDK_ROOT: $ANDROID_NDK_ROOT"
+        
+        if [ -d "$ANDROID_HOME" ]; then
+          echo "✅ Android SDK found"
+          ls -la $ANDROID_HOME
+        else
+          echo "❌ Android SDK not found"
+          exit 1
+        fi
+        
+        if [ -d "$ANDROID_NDK_ROOT" ]; then
+          echo "✅ Android NDK found"
+          ls -la $ANDROID_NDK_ROOT | head -5
+        else
+          echo "❌ Android NDK not found"
+          exit 1
+        fi
+
+    - name: Pre-populate Buildozer Cache
+      run: |
+        echo "Pre-populating Buildozer cache..."
+        
+        # Create Buildozer directories
+        mkdir -p ~/.buildozer/android/platform
+        mkdir -p .buildozer/android/platform
+        
+        # Copy SDK and NDK to Buildozer cache locations
+        cp -r $ANDROID_HOME ~/.buildozer/android/platform/android-sdk
+        cp -r $ANDROID_HOME .buildozer/android/platform/android-sdk
+        
+        # Copy NDK with the specific name Buildozer expects
+        cp -r $ANDROID_NDK_ROOT ~/.buildozer/android/platform/android-ndk-r21.4.7075529
+        cp -r $ANDROID_NDK_ROOT .buildozer/android/platform/android-ndk-r21.4.7075529
+        
+        echo "✅ Buildozer cache populated"
+        
+        # Verify cache
+        echo "Cache verification:"
+        ls -la ~/.buildozer/android/platform/
+        ls -la .buildozer/android/platform/
+
+    - name: Install Build Dependencies
+      run: |
+        echo "Installing build dependencies..."
+        sudo apt-get update -qq
+        sudo apt-get install -y build-essential git unzip python3-dev zlib1g-dev \
+          libncurses5-dev libncursesw5-dev libtinfo5 cmake libffi-dev libssl-dev
+        
+        python -m pip install --upgrade pip setuptools wheel
+        pip install buildozer cython==0.29.33
+        
+        if [ -f requirements.txt ]; then
+          echo "Installing app requirements..."
+          pip install -r requirements.txt
+        fi
+
+    - name: Configure Buildozer
+      run: |
+        echo "Configuring buildozer.spec..."
+        cp buildozer.spec buildozer.spec.backup
+        
+        # Configure buildozer.spec with sed
+        sed -i 's|^#*android\.ndk.*=.*|android.ndk = 21.4.7075529|g' buildozer.spec
+        sed -i 's|^#*android\.api.*=.*|android.api = 31|g' buildozer.spec
+        sed -i 's|^#*android\.minapi.*=.*|android.minapi = 21|g' buildozer.spec
+        sed -i 's|^#*android\.sdk.*=.*|android.sdk = 31|g' buildozer.spec
+        
+        # Add paths to cache
+        echo "android.ndk_path = ~/.buildozer/android/platform/android-ndk-r21.4.7075529" >> buildozer.spec
+        echo "android.sdk_path = ~/.buildozer/android/platform/android-sdk" >> buildozer.spec
+        echo "android.skip_update = True" >> buildozer.spec
+        echo "android.enable_androidx = True" >> buildozer.spec
+        
+        echo "✅ Buildozer configured"
+
+    - name: Build Android APK
+      timeout-minutes: 90
+      run: |
+        echo "Starting Android APK build..."
+        
+        # Set environment variables
+        export ANDROIDSDK=~/.buildozer/android/platform/android-sdk
+        export ANDROIDNDK=~/.buildozer/android/platform/android-ndk-r21.4.7075529
+        export ANDROIDAPI="31"
+        export NDKAPI="21"
+        
+        echo "Build environment:"
+        echo "  ANDROIDSDK: $ANDROIDSDK"
+        echo "  ANDROIDNDK: $ANDROIDNDK"
+        echo "  ANDROID_HOME: $ANDROID_HOME"
+        echo "  PATH: $PATH"
+        
+        echo "Starting buildozer..."
+        if buildozer android debug 2>&1 | tee build_log_v8.txt; then
+          echo "🎉 BUILD SUCCESS!"
+        else
+          echo "❌ Build failed"
+          echo "Last 30 lines of log:"
+          tail -n 30 build_log_v8.txt
+          
+          # Check for specific errors
+          if grep -q "Android NDK is missing" build_log_v8.txt; then
+            echo "🚨 NDK still not found by Buildozer!"
+          fi
+          
+          exit 1
+        fi
+
+    - name: Verify APK Creation
+      run: |
+        echo "Checking for generated APK..."
+        
+        if [ -d "bin" ]; then
+          echo "bin directory contents:"
+          ls -la bin/
+          
+          if ls bin/*.apk 1> /dev/null 2>&1; then
+            echo "🎉 SUCCESS: APK files found!"
+            for apk in bin/*.apk; do
+              echo "📱 APK: $apk"
+              echo "   Size: $(du -h "$apk" | cut -f1)"
+              echo "   Type: $(file "$apk")"
+            done
+          else
+            echo "❌ No APK files in bin/"
+          fi
+        else
+          echo "❌ bin directory not found"
+          echo "Current directory contents:"
+          ls -la
+        fi
+
+    - name: Upload APK
+      if: success()
+      uses: actions/upload-artifact@v4
+      with:
+        name: MonumentRecognizer-APK-v8-MANUAL
+        path: bin/*.apk
+        retention-days: 30
+
+    - name: Upload Build Logs
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: build-logs-v8-manual
+        path: build_log_v8.txt
+        retention-days: 7
+
+    - name: Build Summary
+      if: always()
+      run: |
+        echo "## Android Build v8 MANUAL SDK Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        
+        if ls bin/*.apk 1> /dev/null 2>&1; then
+          echo "### 🎉 BUILD SUCCESS!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "✅ APK generated successfully with manual Android SDK setup!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Generated APK:**" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          ls -la bin/*.apk >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+        else
+          echo "### ❌ BUILD FAILED" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Build failed with manual Android SDK setup." >> $GITHUB_STEP_SUMMARY
+          
+          if [ -f build_log_v8.txt ]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**Last Build Output:**" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            tail -n 20 build_log_v8.txt >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+          fi
+        fi
+        
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### 🔧 v8 Strategy Used" >> $GITHUB_STEP_SUMMARY
+        echo "- **Manual Android SDK** setup (bypassed broken android-actions)" >> $GITHUB_STEP_SUMMARY
+        echo "- **Direct download** of working command line tools" >> $GITHUB_STEP_SUMMARY
+        echo "- **Force NDK 21.4.7075529** installation" >> $GITHUB_STEP_SUMMARY
+        echo "- **Pre-populate** Buildozer cache with correct paths" >> $GITHUB_STEP_SUMMARY
