@@ -138,17 +138,31 @@ jobs:
         echo "Configuring buildozer.spec..."
         cp buildozer.spec buildozer.spec.backup
         
-        # Configure buildozer.spec with sed
-        sed -i 's|^#*android\.ndk.*=.*|android.ndk = 25b|g' buildozer.spec
-        sed -i 's|^#*android\.api.*=.*|android.api = 31|g' buildozer.spec
-        sed -i 's|^#*android\.minapi.*=.*|android.minapi = 21|g' buildozer.spec
-        sed -i 's|^#*android\.sdk.*=.*|android.sdk = 31|g' buildozer.spec
+        # Show current NDK setting
+        echo "Current NDK setting:"
+        grep "android.ndk" buildozer.spec || echo "No NDK setting found"
         
-        # Add paths to cache
+        # Configure buildozer.spec with more precise sed commands
+        sed -i 's|^android\.ndk.*=.*|android.ndk = 25b|g' buildozer.spec
+        sed -i 's|^android\.api.*=.*|android.api = 31|g' buildozer.spec
+        sed -i 's|^android\.minapi.*=.*|android.minapi = 21|g' buildozer.spec
+        sed -i 's|^android\.sdk.*=.*|android.sdk = 31|g' buildozer.spec
+        
+        # Verify changes
+        echo "Updated NDK setting:"
+        grep "android.ndk" buildozer.spec
+        
+        # Add paths to cache (override any existing settings)
+        echo "" >> buildozer.spec
+        echo "# Force cache paths" >> buildozer.spec
         echo "android.ndk_path = ~/.buildozer/android/platform/android-ndk-r25b" >> buildozer.spec
         echo "android.sdk_path = ~/.buildozer/android/platform/android-sdk" >> buildozer.spec
         echo "android.skip_update = True" >> buildozer.spec
         echo "android.enable_androidx = True" >> buildozer.spec
+        
+        # Show final configuration
+        echo "Final buildozer.spec Android settings:"
+        grep "android\.*=" buildozer.spec | head -10
         
         echo "✅ Buildozer configured"
 
@@ -189,24 +203,64 @@ jobs:
       run: |
         echo "Checking for generated APK..."
         
+        # Search for APKs in common locations
+        APK_FOUND=false
+        
+        echo "=== Searching for APK files ==="
+        
+        # Check bin directory
         if [ -d "bin" ]; then
           echo "bin directory contents:"
           ls -la bin/
           
           if ls bin/*.apk 1> /dev/null 2>&1; then
-            echo "🎉 SUCCESS: APK files found!"
+            echo "🎉 SUCCESS: APK files found in bin/!"
             for apk in bin/*.apk; do
               echo "📱 APK: $apk"
               echo "   Size: $(du -h "$apk" | cut -f1)"
               echo "   Type: $(file "$apk")"
             done
+            APK_FOUND=true
           else
-            echo "❌ No APK files in bin/"
+            echo "No APK files in bin/"
           fi
         else
-          echo "❌ bin directory not found"
-          echo "Current directory contents:"
-          ls -la
+          echo "bin directory not found"
+        fi
+        
+        # Check .buildozer directory
+        if [ -d ".buildozer" ]; then
+          echo "\n=== Searching in .buildozer directory ==="
+          find .buildozer -name "*.apk" -type f 2>/dev/null | while read apk; do
+            if [ -f "$apk" ]; then
+              echo "🎉 APK found in buildozer: $apk"
+              echo "   Size: $(du -h "$apk" | cut -f1)"
+              # Copy to bin for upload
+              mkdir -p bin
+              cp "$apk" bin/
+              APK_FOUND=true
+            fi
+          done
+        fi
+        
+        # Search entire project directory
+        echo "\n=== Searching entire project for APKs ==="
+        find . -name "*.apk" -type f -not -path "*/.*" 2>/dev/null | head -5 | while read apk; do
+          echo "📱 Found APK: $apk"
+          echo "   Size: $(du -h "$apk" | cut -f1)"
+          # Copy to bin for upload
+          mkdir -p bin
+          cp "$apk" bin/ 2>/dev/null || true
+        done
+        
+        # Final check
+        if [ -d "bin" ] && ls bin/*.apk 1> /dev/null 2>&1; then
+          echo "\n🎉 FINAL RESULT: APK files ready for upload!"
+          ls -la bin/*.apk
+        else
+          echo "\n❌ No APK files found anywhere"
+          echo "Current directory structure:"
+          find . -maxdepth 2 -type d | head -10
         fi
 
     - name: Upload APK
@@ -214,8 +268,11 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: MonumentRecognizer-APK-v8-MANUAL
-        path: bin/*.apk
+        path: |
+          bin/*.apk
+          **/*.apk
         retention-days: 30
+        if-no-files-found: warn
 
     - name: Upload Build Logs
       if: always()
