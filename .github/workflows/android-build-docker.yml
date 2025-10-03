@@ -1,0 +1,344 @@
+name: Android Build DOCKER
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    
+    # Use Docker container with pre-installed Android SDK
+    container:
+      image: cimg/android:2024.01.1
+      options: --user root
+    
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+
+    - name: Setup Python in Container
+      run: |
+        echo "=== PYTHON SETUP IN CONTAINER ==="
+        
+        # Update package manager
+        apt-get update -qq
+        
+        # Install Python and essential tools
+        apt-get install -y python3 python3-pip python3-dev python3-venv \
+          build-essential git wget unzip curl \
+          zlib1g-dev libffi-dev libssl-dev \
+          openjdk-17-jdk
+        
+        # Create symlinks for compatibility
+        ln -sf /usr/bin/python3 /usr/bin/python
+        
+        # Upgrade pip
+        python3 -m pip install --upgrade pip setuptools wheel
+        
+        echo "Python version: $(python3 --version)"
+        echo "Pip version: $(pip --version)"
+
+    - name: Verify Android SDK in Container
+      run: |
+        echo "=== ANDROID SDK VERIFICATION ==="
+        
+        # Check if Android SDK is available in container
+        echo "Android SDK structure:"
+        ls -la /opt/android/sdk/ || echo "SDK not in /opt/android/sdk"
+        ls -la /android-sdk/ || echo "SDK not in /android-sdk"
+        ls -la $ANDROID_HOME || echo "ANDROID_HOME not set or not found"
+        
+        # Check environment variables
+        echo "Environment variables:"
+        echo "ANDROID_HOME: $ANDROID_HOME"
+        echo "ANDROID_SDK_ROOT: $ANDROID_SDK_ROOT"
+        echo "PATH: $PATH"
+        
+        # Try to find Android SDK
+        find /opt -name "android-sdk*" -type d 2>/dev/null || echo "No android-sdk found in /opt"
+        find / -maxdepth 3 -name "*android*" -type d 2>/dev/null | head -10
+
+    - name: Setup Android Environment
+      run: |
+        echo "=== ANDROID ENVIRONMENT SETUP ==="
+        
+        # Set Android environment variables
+        export ANDROID_HOME=/opt/android/sdk
+        export ANDROID_SDK_ROOT=/opt/android/sdk
+        export PATH=$ANDROID_HOME/tools:$ANDROID_HOME/tools/bin:$ANDROID_HOME/platform-tools:$PATH
+        
+        # Create directories if they don't exist
+        mkdir -p $ANDROID_HOME/cmdline-tools/latest/bin
+        
+        # If SDK is not properly installed, install it
+        if [ ! -d "$ANDROID_HOME/platform-tools" ]; then
+          echo "Installing Android SDK manually..."
+          
+          # Download command line tools
+          cd /tmp
+          wget -q https://dl.google.com/android/repository/commandlinetools-linux-8512546_latest.zip
+          unzip -q commandlinetools-linux-8512546_latest.zip
+          
+          # Setup SDK structure
+          mkdir -p $ANDROID_HOME
+          mv cmdline-tools $ANDROID_HOME/cmdline-tools-temp
+          mkdir -p $ANDROID_HOME/cmdline-tools/latest
+          mv $ANDROID_HOME/cmdline-tools-temp/* $ANDROID_HOME/cmdline-tools/latest/
+          rmdir $ANDROID_HOME/cmdline-tools-temp
+          
+          # Accept licenses and install packages
+          yes | $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager --licenses || true
+          $ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager "platform-tools" "platforms;android-31" "build-tools;31.0.0"
+        fi
+        
+        # Install NDK 25b
+        echo "Installing NDK 25b..."
+        cd /tmp
+        wget -q https://dl.google.com/android/repository/android-ndk-r25b-linux.zip
+        unzip -q android-ndk-r25b-linux.zip
+        mv android-ndk-r25b $ANDROID_HOME/ndk-r25b
+        
+        # Export environment variables for next steps
+        echo "ANDROID_HOME=$ANDROID_HOME" >> $GITHUB_ENV
+        echo "ANDROID_SDK_ROOT=$ANDROID_HOME" >> $GITHUB_ENV
+        echo "ANDROID_NDK_ROOT=$ANDROID_HOME/ndk-r25b" >> $GITHUB_ENV
+        echo "PATH=$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$PATH" >> $GITHUB_ENV
+        
+        # Verify installation
+        echo "Final Android setup:"
+        echo "ANDROID_HOME: $ANDROID_HOME"
+        ls -la $ANDROID_HOME
+
+    - name: Install Build Dependencies
+      run: |
+        echo "=== INSTALLING BUILD DEPENDENCIES ==="
+        
+        # Install additional build dependencies
+        apt-get install -y libncurses5-dev libncursesw5-dev cmake
+        
+        # Install Python packages
+        pip install buildozer cython==0.29.33
+        
+        # Install app requirements if available
+        if [ -f "requirements.txt" ]; then
+          pip install -r requirements.txt
+        fi
+        
+        echo "=== DEPENDENCY VERSIONS ==="
+        python3 --version
+        pip --version
+        buildozer version
+        cython --version
+
+    - name: Create Minimal Test App
+      run: |
+        echo "=== CREATING MINIMAL TEST APP ==="
+        
+        # Create a minimal main.py for testing
+        cat > main_test.py << 'EOF'
+from kivy.app import App
+from kivymd.app import MDApp
+from kivymd.uix.boxlayout import MDBoxLayout
+from kivymd.uix.label import MDLabel
+from kivymd.uix.button import MDRaisedButton
+
+class TestApp(MDApp):
+    def build(self):
+        self.theme_cls.theme_style = "Light"
+        self.theme_cls.primary_palette = "Blue"
+        
+        layout = MDBoxLayout(
+            orientation="vertical",
+            spacing="20dp",
+            adaptive_height=True,
+            pos_hint={"center_x": 0.5, "center_y": 0.5}
+        )
+        
+        # Title
+        title = MDLabel(
+            text="Monument Recognizer",
+            halign="center",
+            theme_text_color="Primary",
+            font_style="H4"
+        )
+        
+        # Test button
+        button = MDRaisedButton(
+            text="Test Button",
+            pos_hint={"center_x": 0.5},
+            on_release=self.on_button_press
+        )
+        
+        layout.add_widget(title)
+        layout.add_widget(button)
+        
+        return layout
+    
+    def on_button_press(self, *args):
+        print("Button pressed - APK is working!")
+
+TestApp().run()
+EOF
+        
+        echo "Minimal test app created"
+
+    - name: Configure Buildozer for Container
+      run: |
+        echo "=== CONFIGURING BUILDOZER ==="
+        
+        # Create minimal buildozer.spec for testing
+        cat > buildozer_docker.spec << 'EOF'
+[app]
+title = Monument Recognizer Test
+package.name = monumenttest
+package.domain = com.monumenttest
+source.dir = .
+source.include_exts = py,png,jpg,kv
+version = 1.0.0
+
+# Minimal requirements
+requirements = python3,kivy==2.1.0,kivymd
+
+# Android configuration
+android.api = 31
+android.minapi = 21
+android.sdk = 31
+android.ndk = 25b
+android.archs = arm64-v8a
+android.permissions = INTERNET
+android.private_storage = True
+android.skip_update = True
+
+# Use container paths
+android.ndk_path = /opt/android/sdk/ndk-r25b
+android.sdk_path = /opt/android/sdk
+
+orientation = portrait
+
+[buildozer]
+log_level = 2
+warn_on_root = 0
+EOF
+        
+        echo "Buildozer configuration created for container environment"
+        
+        # Show configuration
+        echo "Buildozer config:"
+        cat buildozer_docker.spec
+
+    - name: Build APK in Container
+      run: |
+        echo "=== BUILDING APK IN CONTAINER ==="
+        
+        # Set environment
+        export ANDROIDSDK=$ANDROID_HOME
+        export ANDROIDNDK=$ANDROID_NDK_ROOT
+        export ANDROIDAPI="31"
+        export NDKAPI="21"
+        
+        echo "Build environment:"
+        echo "  ANDROID_HOME: $ANDROID_HOME"
+        echo "  ANDROID_NDK_ROOT: $ANDROID_NDK_ROOT"
+        echo "  ANDROIDSDK: $ANDROIDSDK"
+        echo "  ANDROIDNDK: $ANDROIDNDK"
+        
+        # Build with test configuration
+        echo "Starting buildozer build..."
+        
+        # Use the test main.py
+        mv main.py main_full.py 2>/dev/null || true
+        mv main_test.py main.py
+        
+        # Build APK
+        if buildozer -f buildozer_docker.spec android debug --verbose 2>&1 | tee docker_build.log; then
+          echo "🎉 BUILD SUCCESS!"
+        else
+          echo "❌ Build failed"
+          echo "=== BUILD ERROR LOG ==="
+          tail -50 docker_build.log
+          exit 1
+        fi
+
+    - name: Find and Verify APK
+      run: |
+        echo "=== SEARCHING FOR APK ==="
+        
+        # Search for generated APK files
+        echo "Searching entire filesystem for APK files..."
+        find / -name "*.apk" -type f 2>/dev/null | while read apk; do
+          if [ -f "$apk" ]; then
+            echo "📱 APK found: $apk"
+            echo "   Size: $(du -h "$apk" | cut -f1)"
+            echo "   Type: $(file "$apk")"
+            
+            # Copy to standard location for upload
+            mkdir -p bin
+            cp "$apk" bin/
+          fi
+        done
+        
+        # Check if we have any APKs in bin
+        if [ -d "bin" ] && ls bin/*.apk 1>/dev/null 2>&1; then
+          echo "🎉 APK files ready for upload:"
+          ls -la bin/*.apk
+        else
+          echo "❌ No APK files found"
+          echo "Directory structure:"
+          find . -maxdepth 2 -type d
+        fi
+
+    - name: Upload APK
+      if: success()
+      uses: actions/upload-artifact@v4
+      with:
+        name: MonumentRecognizer-APK-DOCKER
+        path: |
+          bin/*.apk
+          **/*.apk
+        retention-days: 30
+        if-no-files-found: warn
+
+    - name: Upload Build Logs
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: docker-build-logs
+        path: |
+          docker_build.log
+          buildozer_docker.spec
+        retention-days: 7
+
+    - name: Build Summary
+      if: always()
+      run: |
+        echo "## Android Build DOCKER Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        
+        if [ -d "bin" ] && ls bin/*.apk 1>/dev/null 2>&1; then
+          echo "### 🎉 BUILD SUCCESS!" >> $GITHUB_STEP_SUMMARY
+          echo "✅ APK generated successfully using Docker container!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Generated APK:**" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          ls -la bin/*.apk >> $GITHUB_STEP_SUMMARY 2>/dev/null || echo "APK info not available" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+        else
+          echo "### ❌ BUILD FAILED" >> $GITHUB_STEP_SUMMARY
+          echo "Build failed even with Docker container approach." >> $GITHUB_STEP_SUMMARY
+          
+          if [ -f "docker_build.log" ]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**Error Log:**" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            tail -20 docker_build.log >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+          fi
+        fi
+        
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### 🐳 Docker Strategy Used" >> $GITHUB_STEP_SUMMARY
+        echo "- **Pre-configured Android container** (cimg/android:2024.01.1)" >> $GITHUB_STEP_SUMMARY
+        echo "- **Minimal test app** with basic KivyMD UI" >> $GITHUB_STEP_SUMMARY
+        echo "- **Container-optimized** buildozer configuration" >> $GITHUB_STEP_SUMMARY
+        echo "- **Root permissions** to avoid permission issues" >> $GITHUB_STEP_SUMMARY
