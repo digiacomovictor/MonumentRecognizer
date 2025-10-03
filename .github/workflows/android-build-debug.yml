@@ -1,0 +1,243 @@
+name: Android Build DEBUG
+
+on:
+  workflow_dispatch:
+
+jobs:
+  debug:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+
+    - name: Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+
+    - name: Setup Java
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'temurin'
+        java-version: '17'
+
+    - name: Manual Android SDK Setup
+      run: |
+        echo "=== ANDROID SDK SETUP DEBUG ==="
+        
+        # Create Android SDK directory
+        export ANDROID_HOME=$HOME/android-sdk
+        mkdir -p $ANDROID_HOME
+        
+        # Download and install command line tools
+        echo "Downloading Android SDK command line tools..."
+        wget -q https://dl.google.com/android/repository/commandlinetools-linux-8512546_latest.zip -O cmdtools.zip
+        unzip -q cmdtools.zip -d $ANDROID_HOME
+        mv $ANDROID_HOME/cmdline-tools $ANDROID_HOME/cmdline-tools-temp
+        mkdir -p $ANDROID_HOME/cmdline-tools/latest
+        mv $ANDROID_HOME/cmdline-tools-temp/* $ANDROID_HOME/cmdline-tools/latest/
+        rmdir $ANDROID_HOME/cmdline-tools-temp
+        rm cmdtools.zip
+        
+        # Set PATH
+        export PATH=$ANDROID_HOME/cmdline-tools/latest/bin:$PATH
+        export PATH=$ANDROID_HOME/platform-tools:$PATH
+        
+        # Accept licenses
+        yes | sdkmanager --licenses || true
+        
+        # Install required packages
+        sdkmanager "platform-tools" "platforms;android-31" "build-tools;31.0.0"
+        
+        # Download NDK 25b
+        echo "Downloading NDK 25b..."
+        wget -q https://dl.google.com/android/repository/android-ndk-r25b-linux.zip -O ndk25.zip
+        unzip -q ndk25.zip -d $ANDROID_HOME
+        mv $ANDROID_HOME/android-ndk-r25b $ANDROID_HOME/ndk-r25b
+        rm ndk25.zip
+        
+        echo "ANDROID_HOME=$ANDROID_HOME" >> $GITHUB_ENV
+        echo "ANDROID_NDK_ROOT=$ANDROID_HOME/ndk-r25b" >> $GITHUB_ENV
+        echo "ANDROID_SDK_ROOT=$ANDROID_HOME" >> $GITHUB_ENV
+        echo "PATH=$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$PATH" >> $GITHUB_ENV
+
+    - name: Verify Android Setup
+      run: |
+        echo "=== ANDROID SETUP VERIFICATION ==="
+        echo "ANDROID_HOME: $ANDROID_HOME"
+        echo "ANDROID_NDK_ROOT: $ANDROID_NDK_ROOT"
+        echo "PATH: $PATH"
+        
+        echo "=== SDK Structure ==="
+        ls -la $ANDROID_HOME
+        
+        echo "=== NDK Structure ==="
+        ls -la $ANDROID_NDK_ROOT | head -5
+        
+        echo "=== NDK Version Check ==="
+        if [ -f "$ANDROID_NDK_ROOT/source.properties" ]; then
+          cat $ANDROID_NDK_ROOT/source.properties
+        else
+          echo "No source.properties found"
+        fi
+
+    - name: Install Build Dependencies
+      run: |
+        echo "=== INSTALLING DEPENDENCIES ==="
+        sudo apt-get update -qq
+        sudo apt-get install -y build-essential git unzip python3-dev zlib1g-dev \
+          libncurses5-dev libncursesw5-dev libncurses-dev cmake libffi-dev libssl-dev
+        
+        python -m pip install --upgrade pip setuptools wheel
+        pip install buildozer cython==0.29.33
+        
+        echo "=== DEPENDENCY VERSIONS ==="
+        python --version
+        pip --version
+        buildozer version
+        cython --version
+
+    - name: Pre-populate Buildozer Cache
+      run: |
+        echo "=== BUILDOZER CACHE SETUP ==="
+        
+        # Create cache directories
+        mkdir -p ~/.buildozer/android/platform
+        mkdir -p .buildozer/android/platform
+        
+        # Copy SDK and NDK
+        cp -r $ANDROID_HOME ~/.buildozer/android/platform/android-sdk
+        cp -r $ANDROID_HOME .buildozer/android/platform/android-sdk
+        cp -r $ANDROID_NDK_ROOT ~/.buildozer/android/platform/android-ndk-r25b
+        cp -r $ANDROID_NDK_ROOT .buildozer/android/platform/android-ndk-r25b
+        
+        # Create sdkmanager symlinks
+        mkdir -p ~/.buildozer/android/platform/android-sdk/tools/bin
+        mkdir -p .buildozer/android/platform/android-sdk/tools/bin
+        ln -sf ~/.buildozer/android/platform/android-sdk/cmdline-tools/latest/bin/sdkmanager ~/.buildozer/android/platform/android-sdk/tools/bin/sdkmanager
+        ln -sf .buildozer/android/platform/android-sdk/cmdline-tools/latest/bin/sdkmanager .buildozer/android/platform/android-sdk/tools/bin/sdkmanager
+        
+        echo "=== CACHE VERIFICATION ==="
+        ls -la ~/.buildozer/android/platform/
+        ls -la .buildozer/android/platform/
+
+    - name: Debug Buildozer Spec
+      run: |
+        echo "=== BUILDOZER SPEC ANALYSIS ==="
+        
+        echo "Current buildozer.spec content:"
+        cat buildozer.spec | grep -E "(android\.|requirements)"
+        
+        echo "=== MODIFYING BUILDOZER SPEC ==="
+        cp buildozer.spec buildozer.spec.backup
+        
+        # Show current settings
+        echo "Before modification:"
+        grep "android.ndk" buildozer.spec || echo "No NDK setting found"
+        grep "android.api" buildozer.spec || echo "No API setting found"
+        
+        # Modify settings
+        sed -i 's|^android\.ndk.*=.*|android.ndk = 25b|g' buildozer.spec
+        sed -i 's|^android\.api.*=.*|android.api = 31|g' buildozer.spec
+        sed -i 's|^android\.minapi.*=.*|android.minapi = 21|g' buildozer.spec
+        sed -i 's|^android\.sdk.*=.*|android.sdk = 31|g' buildozer.spec
+        
+        # Add forced paths
+        echo "" >> buildozer.spec
+        echo "# Forced cache paths" >> buildozer.spec
+        echo "android.ndk_path = ~/.buildozer/android/platform/android-ndk-r25b" >> buildozer.spec
+        echo "android.sdk_path = ~/.buildozer/android/platform/android-sdk" >> buildozer.spec
+        echo "android.skip_update = True" >> buildozer.spec
+        
+        echo "After modification:"
+        grep "android.ndk" buildozer.spec
+        grep "android.api" buildozer.spec
+        grep "android.skip_update" buildozer.spec
+        
+        echo "=== TESTING WITH MINIMAL CONFIG ==="
+        # Copy minimal config for testing
+        cp buildozer-minimal.spec buildozer-test.spec
+        echo "android.ndk_path = ~/.buildozer/android/platform/android-ndk-r25b" >> buildozer-test.spec
+        echo "android.sdk_path = ~/.buildozer/android/platform/android-sdk" >> buildozer-test.spec
+        
+        echo "Minimal config contents:"
+        cat buildozer-test.spec
+
+    - name: Test Buildozer Init
+      run: |
+        echo "=== BUILDOZER INITIALIZATION TEST ==="
+        
+        # Set environment variables
+        export ANDROIDSDK=~/.buildozer/android/platform/android-sdk
+        export ANDROIDNDK=~/.buildozer/android/platform/android-ndk-r25b
+        export ANDROIDAPI="31"
+        export NDKAPI="21"
+        
+        echo "Environment:"
+        echo "  ANDROIDSDK: $ANDROIDSDK"
+        echo "  ANDROIDNDK: $ANDROIDNDK"
+        echo "  ANDROIDAPI: $ANDROIDAPI"
+        echo "  NDKAPI: $NDKAPI"
+        
+        # Test with minimal config first
+        echo "Testing buildozer with minimal config..."
+        if timeout 300 buildozer -f buildozer-test.spec android debug --verbose 2>&1 | tee debug_build_minimal.log | head -50; then
+          echo "Minimal build started successfully"
+        else
+          echo "Minimal build failed - checking log..."
+          echo "=== FIRST 30 LINES OF MINIMAL ERROR ==="
+          head -30 debug_build_minimal.log
+          echo "=== LAST 30 LINES OF MINIMAL ERROR ==="
+          tail -30 debug_build_minimal.log
+        fi
+        
+        echo "\n=== TESTING WITH FULL CONFIG ==="
+        # Test buildozer with full config
+        echo "Testing buildozer with full config..."
+        if timeout 300 buildozer android debug --verbose 2>&1 | tee debug_build.log | head -50; then
+          echo "Full build started successfully"
+        else
+          echo "Full build failed early - checking log..."
+          echo "=== FIRST 30 LINES OF FULL ERROR ==="
+          head -30 debug_build.log
+          echo "=== LAST 30 LINES OF FULL ERROR ==="
+          tail -30 debug_build.log
+        fi
+
+    - name: Upload Debug Logs
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: debug-build-logs
+        path: |
+          debug_build.log
+          debug_build_minimal.log
+          buildozer.spec.backup
+          buildozer.spec
+          buildozer-test.spec
+          buildozer-minimal.spec
+        retention-days: 7
+
+    - name: Debug Summary
+      if: always()
+      run: |
+        echo "## Android Build Debug Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        
+        if [ -f "debug_build.log" ]; then
+          echo "### Build Log Sample" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          head -30 debug_build.log >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          tail -30 debug_build.log >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+        fi
+        
+        echo "### Environment Info" >> $GITHUB_STEP_SUMMARY
+        echo "- ANDROID_HOME: $ANDROID_HOME" >> $GITHUB_STEP_SUMMARY
+        echo "- ANDROID_NDK_ROOT: $ANDROID_NDK_ROOT" >> $GITHUB_STEP_SUMMARY
+        echo "- Build OS: $(uname -a)" >> $GITHUB_STEP_SUMMARY
