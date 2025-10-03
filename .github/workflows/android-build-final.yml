@@ -1,0 +1,329 @@
+name: Android Build FINAL
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    
+    steps:
+    - name: Checkout Repository
+      uses: actions/checkout@v4
+
+    - name: Setup Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.9'
+
+    - name: Setup Java
+      uses: actions/setup-java@v4
+      with:
+        distribution: 'temurin'
+        java-version: '17'
+
+    - name: Manual Android SDK Setup
+      run: |
+        echo "=== ANDROID SDK SETUP ==="
+        
+        # Create Android SDK directory
+        export ANDROID_HOME=$HOME/android-sdk
+        mkdir -p $ANDROID_HOME
+        
+        # Download and install command line tools (proven working version)
+        echo "Downloading Android SDK command line tools..."
+        wget -q https://dl.google.com/android/repository/commandlinetools-linux-8512546_latest.zip -O cmdtools.zip
+        unzip -q cmdtools.zip -d $ANDROID_HOME
+        mv $ANDROID_HOME/cmdline-tools $ANDROID_HOME/cmdline-tools-temp
+        mkdir -p $ANDROID_HOME/cmdline-tools/latest
+        mv $ANDROID_HOME/cmdline-tools-temp/* $ANDROID_HOME/cmdline-tools/latest/
+        rmdir $ANDROID_HOME/cmdline-tools-temp
+        rm cmdtools.zip
+        
+        # Set PATH
+        export PATH=$ANDROID_HOME/cmdline-tools/latest/bin:$PATH
+        export PATH=$ANDROID_HOME/platform-tools:$PATH
+        
+        # Accept licenses
+        yes | sdkmanager --licenses || true
+        
+        # Install required packages
+        sdkmanager "platform-tools" "platforms;android-31" "build-tools;31.0.0"
+        
+        # Download and install NDK 25b (required by python-for-android)
+        echo "Installing NDK 25b..."
+        wget -q https://dl.google.com/android/repository/android-ndk-r25b-linux.zip -O ndk25.zip
+        unzip -q ndk25.zip -d $ANDROID_HOME
+        mv $ANDROID_HOME/android-ndk-r25b $ANDROID_HOME/ndk-r25b
+        rm ndk25.zip
+        
+        echo "✅ Android SDK setup complete"
+        echo "ANDROID_HOME: $ANDROID_HOME"
+        echo "NDK: $ANDROID_HOME/ndk-r25b"
+        
+        # Export for next steps
+        echo "ANDROID_HOME=$ANDROID_HOME" >> $GITHUB_ENV
+        echo "ANDROID_NDK_ROOT=$ANDROID_HOME/ndk-r25b" >> $GITHUB_ENV
+        echo "ANDROID_SDK_ROOT=$ANDROID_HOME" >> $GITHUB_ENV
+        echo "PATH=$ANDROID_HOME/cmdline-tools/latest/bin:$ANDROID_HOME/platform-tools:$PATH" >> $GITHUB_ENV
+
+    - name: Verify Android Installation
+      run: |
+        echo "=== VERIFYING ANDROID INSTALLATION ==="
+        echo "ANDROID_HOME: $ANDROID_HOME"
+        echo "ANDROID_NDK_ROOT: $ANDROID_NDK_ROOT"
+        
+        if [ -d "$ANDROID_HOME" ]; then
+          echo "✅ Android SDK found"
+          ls -la $ANDROID_HOME | head -10
+        else
+          echo "❌ Android SDK not found"
+          exit 1
+        fi
+        
+        if [ -d "$ANDROID_NDK_ROOT" ]; then
+          echo "✅ Android NDK found"
+          ls -la $ANDROID_NDK_ROOT | head -5
+          
+          # Check NDK version
+          if [ -f "$ANDROID_NDK_ROOT/source.properties" ]; then
+            echo "NDK Version info:"
+            cat $ANDROID_NDK_ROOT/source.properties | grep "Pkg.Revision"
+          fi
+        else
+          echo "❌ Android NDK not found"
+          exit 1
+        fi
+
+    - name: Pre-populate Buildozer Cache
+      run: |
+        echo "=== PRE-POPULATING BUILDOZER CACHE ==="
+        
+        # Create Buildozer directories
+        mkdir -p ~/.buildozer/android/platform
+        mkdir -p .buildozer/android/platform
+        
+        # Copy SDK and NDK to Buildozer cache locations
+        echo "Copying Android SDK to cache..."
+        cp -r $ANDROID_HOME ~/.buildozer/android/platform/android-sdk
+        cp -r $ANDROID_HOME .buildozer/android/platform/android-sdk
+        
+        echo "Copying Android NDK to cache..."
+        cp -r $ANDROID_NDK_ROOT ~/.buildozer/android/platform/android-ndk-r25b
+        cp -r $ANDROID_NDK_ROOT .buildozer/android/platform/android-ndk-r25b
+        
+        # Create sdkmanager symlink where Buildozer expects it
+        echo "Creating sdkmanager symlinks..."
+        mkdir -p ~/.buildozer/android/platform/android-sdk/tools/bin
+        mkdir -p .buildozer/android/platform/android-sdk/tools/bin
+        ln -sf ~/.buildozer/android/platform/android-sdk/cmdline-tools/latest/bin/sdkmanager ~/.buildozer/android/platform/android-sdk/tools/bin/sdkmanager
+        ln -sf .buildozer/android/platform/android-sdk/cmdline-tools/latest/bin/sdkmanager .buildozer/android/platform/android-sdk/tools/bin/sdkmanager
+        
+        echo "✅ Buildozer cache populated successfully"
+        
+        # Verify cache
+        echo "Cache verification:"
+        ls -la ~/.buildozer/android/platform/
+        ls -la .buildozer/android/platform/
+
+    - name: Install Build Dependencies
+      run: |
+        echo "=== INSTALLING BUILD DEPENDENCIES ==="
+        sudo apt-get update -qq
+        sudo apt-get install -y build-essential git unzip python3-dev zlib1g-dev \
+          libncurses5-dev libncursesw5-dev libncurses-dev cmake libffi-dev libssl-dev
+        
+        python -m pip install --upgrade pip setuptools wheel
+        pip install buildozer cython==0.29.33
+        
+        # Install app requirements if available
+        if [ -f requirements.txt ]; then
+          echo "Installing app requirements..."
+          pip install -r requirements.txt
+        fi
+        
+        echo "=== DEPENDENCY VERSIONS ==="
+        python --version
+        pip --version
+        buildozer version
+        cython --version
+
+    - name: Configure Buildozer
+      run: |
+        echo "=== CONFIGURING BUILDOZER ==="
+        cp buildozer.spec buildozer.spec.backup
+        
+        # Show current configuration
+        echo "Current NDK setting:"
+        grep "android.ndk" buildozer.spec || echo "No NDK setting found"
+        
+        # Apply proven working configuration
+        sed -i 's|^android\.ndk.*=.*|android.ndk = 25b|g' buildozer.spec
+        sed -i 's|^android\.api.*=.*|android.api = 31|g' buildozer.spec
+        sed -i 's|^android\.minapi.*=.*|android.minapi = 21|g' buildozer.spec
+        sed -i 's|^android\.sdk.*=.*|android.sdk = 31|g' buildozer.spec
+        
+        # Verify changes
+        echo "Updated configuration:"
+        grep "android.ndk" buildozer.spec
+        grep "android.api" buildozer.spec
+        
+        # Force cache paths (critical for success)
+        echo "" >> buildozer.spec
+        echo "# Forced cache paths (from working debug)" >> buildozer.spec
+        echo "android.ndk_path = ~/.buildozer/android/platform/android-ndk-r25b" >> buildozer.spec
+        echo "android.sdk_path = ~/.buildozer/android/platform/android-sdk" >> buildozer.spec
+        echo "android.skip_update = True" >> buildozer.spec
+        echo "android.enable_androidx = True" >> buildozer.spec
+        
+        echo "✅ Buildozer configured with working settings"
+
+    - name: Build Android APK
+      timeout-minutes: 90
+      run: |
+        echo "=== BUILDING ANDROID APK ==="
+        
+        # Set environment variables (from working debug)
+        export ANDROIDSDK=~/.buildozer/android/platform/android-sdk
+        export ANDROIDNDK=~/.buildozer/android/platform/android-ndk-r25b
+        export ANDROIDAPI="31"
+        export NDKAPI="21"
+        
+        echo "Build environment:"
+        echo "  ANDROIDSDK: $ANDROIDSDK"
+        echo "  ANDROIDNDK: $ANDROIDNDK"
+        echo "  ANDROID_HOME: $ANDROID_HOME"
+        echo "  PATH: $PATH"
+        
+        echo "🚀 Starting buildozer build..."
+        echo "This may take 15-30 minutes..."
+        
+        if buildozer android debug --verbose 2>&1 | tee build_final.log; then
+          echo "🎉 BUILD SUCCESS!"
+        else
+          echo "❌ Build failed"
+          echo ""
+          echo "=== LAST 50 LINES OF BUILD LOG ==="
+          tail -n 50 build_final.log
+          exit 1
+        fi
+
+    - name: Find and Verify APK
+      run: |
+        echo "=== SEARCHING FOR GENERATED APK ==="
+        
+        APK_FOUND=false
+        
+        # Search in standard locations
+        echo "Checking bin directory..."
+        if [ -d "bin" ] && ls bin/*.apk >/dev/null 2>&1; then
+          echo "🎉 APK files found in bin/:"
+          ls -la bin/*.apk
+          APK_FOUND=true
+        else
+          echo "No APKs in bin/, searching other locations..."
+        fi
+        
+        # Search in buildozer directories
+        echo "Searching .buildozer directories..."
+        find .buildozer -name "*.apk" -type f 2>/dev/null | while read apk; do
+          if [ -f "$apk" ]; then
+            echo "🎉 APK found: $apk"
+            echo "   Size: $(du -h "$apk" | cut -f1)"
+            
+            # Copy to bin for upload
+            mkdir -p bin
+            cp "$apk" bin/
+            APK_FOUND=true
+          fi
+        done
+        
+        # Search entire project
+        echo "Final search across entire project..."
+        find . -name "*.apk" -type f -not -path "*/.*" 2>/dev/null | head -5 | while read apk; do
+          echo "📱 Found APK: $apk"
+          echo "   Size: $(du -h "$apk" | cut -f1)"
+          echo "   Type: $(file "$apk")"
+          
+          # Copy to bin
+          mkdir -p bin
+          cp "$apk" bin/ 2>/dev/null || true
+        done
+        
+        # Final verification
+        if [ -d "bin" ] && ls bin/*.apk >/dev/null 2>&1; then
+          echo ""
+          echo "🎉 FINAL RESULT: APK files ready!"
+          ls -la bin/*.apk
+        else
+          echo ""
+          echo "❌ No APK files found"
+          echo "Directory structure:"
+          find . -maxdepth 3 -type d | grep -E "(bin|build|dist)" | head -10
+        fi
+
+    - name: Upload APK
+      if: success()
+      uses: actions/upload-artifact@v4
+      with:
+        name: MonumentRecognizer-APK-FINAL
+        path: |
+          bin/*.apk
+          **/*.apk
+        retention-days: 30
+        if-no-files-found: warn
+
+    - name: Upload Build Logs
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: final-build-logs
+        path: |
+          build_final.log
+          buildozer.spec.backup
+          buildozer.spec
+        retention-days: 7
+
+    - name: Build Summary
+      if: always()
+      run: |
+        echo "## 🎉 Android Build FINAL Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        
+        if [ -d "bin" ] && ls bin/*.apk >/dev/null 2>&1; then
+          echo "### 🎉 BUILD SUCCESS!" >> $GITHUB_STEP_SUMMARY
+          echo "✅ APK generated successfully using proven debug workflow settings!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Generated APK:**" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          ls -la bin/*.apk >> $GITHUB_STEP_SUMMARY 2>/dev/null || echo "APK info not available" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "🎯 **Success Factors:**" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ NDK 25b (python-for-android compatible)" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Proper buildozer cache pre-population" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Correct sdkmanager symlinks" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Fixed buildozer.spec configuration" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Skip SDK/NDK updates (use cached versions)" >> $GITHUB_STEP_SUMMARY
+        else
+          echo "### ❌ BUILD FAILED" >> $GITHUB_STEP_SUMMARY
+          echo "Build failed despite using working debug workflow settings." >> $GITHUB_STEP_SUMMARY
+          
+          if [ -f "build_final.log" ]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**Error Log (last 20 lines):**" >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+            tail -20 build_final.log >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+          fi
+        fi
+        
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### 📋 Applied Fixes" >> $GITHUB_STEP_SUMMARY
+        echo "Based on successful debug workflow:" >> $GITHUB_STEP_SUMMARY
+        echo "- 🔧 **NDK Version**: Updated to 25b (minimum required)" >> $GITHUB_STEP_SUMMARY
+        echo "- 🔧 **Cache Strategy**: Pre-populated with correct SDK/NDK" >> $GITHUB_STEP_SUMMARY
+        echo "- 🔧 **Configuration**: Fixed buildozer.spec with proven settings" >> $GITHUB_STEP_SUMMARY
+        echo "- 🔧 **Symlinks**: Created sdkmanager compatibility links" >> $GITHUB_STEP_SUMMARY
+        echo "- 🔧 **Environment**: Proper PATH and variable setup" >> $GITHUB_STEP_SUMMARY
